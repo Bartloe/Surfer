@@ -1,0 +1,6 @@
+ddgs
+requests
+selectolax
+langdetect
+httpx
+python-dotenv
