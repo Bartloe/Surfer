@@ -97,6 +97,15 @@ def _exporteer(opslag: Opslag, run_id: int, pad: Path) -> None:
 def _zelftest() -> int:
     fouten: list[str] = []
 
+    # Maak de taaldetectie deterministisch: langdetect kiest anders per aanroep
+    # een willekeurig zaad en kan synthetische testtekst wisselend taggen,
+    # waardoor de taal-zeef de testvondsten grillig wegfiltert.
+    try:
+        import langdetect
+        langdetect.DetectorFactory.seed = 0
+    except Exception:
+        pass
+
     class NepBeoordelaar:
         def beoordeel(self, titel, tekst, profiel_tekst):
             # Eén pagina -> twee vondsten (bewijst de listicle-winst).
@@ -117,7 +126,12 @@ def _zelftest() -> int:
 
     def nep_extract(html):
         from .extractie import Extractie
-        return Extractie(titel="Pagina", tekst="new tv series 2026 " * 30, omschrijving="")
+        # Realistische Engelse tekst, zodat de taal-zeef ('en') deze betrouwbaar
+        # doorlaat in plaats van synthetische woordherhaling die grillig detecteert.
+        tekst = ("A thrilling new drama series follows a detective in a coastal "
+                 "town. The show premieres in 2026 and has received strong early "
+                 "reviews from critics and audiences alike. ") * 4
+        return Extractie(titel="Pagina", tekst=tekst, omschrijving="")
 
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         db = Path(tmp) / "t.db"
