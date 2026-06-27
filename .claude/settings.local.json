@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(gh *)",
+      "PowerShell(winget install *)",
+      "PowerShell(Test-Path *)",
+      "PowerShell($zip='c:\\\\Dev\\\\surfer2kopie - kopie\\\\surfer.zip'; Add-Type -AssemblyName System.IO.Compression.FileSystem; $a=[System.IO.Compression.ZipFile]::OpenRead\\($zip\\); $a.Entries | Select-Object FullName, Length | Sort-Object FullName | Format-Table -AutoSize; $a.Dispose\\(\\))",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(Expand-Archive *)",
+      "PowerShell(python 'C:\\\\VSCode\\\\Surfer\\\\poc\\\\_inspect.py')"
+    ]
+  }
+}

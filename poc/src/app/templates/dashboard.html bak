@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+{% set current = request.url.path %}
+
+<div class="top-bar">
+
+    <!-- Navigatie-tabs -->
+    <div class="nav-tabs">
+		<a href="/" class="tab-btn {% if current == '/' %}active{% endif %}">Dashboard</a>
+		<a href="/tab1" class="tab-btn {% if current.startswith('/tab1') %}active{% endif %}">Relevante resultaten</a>
+		<a href="/tab2" class="tab-btn {% if current.startswith('/tab2') %}active{% endif %}">Scrape mislukt</a>
+		<a href="/profiles" class="tab-btn {% if current.startswith('/profiles') %}active{% endif %}">Smaakprofielen</a>
+	</div>
+
+    <!-- Ruimte -->
+    <div style="width: 40px;"></div>
+
+    <!-- Actie-knoppen -->
+    <div class="action-buttons">
+        <button onclick="window.location.href='/export-modal'" class="action-btn export">Export</button>
+        <button onclick="window.location.href='/upload-modal'" class="action-btn upload">Upload</button>
+    </div>
+
+</div>
+
+<!-- Daarna komt de rest van je dashboard -->
+
+
+
+
+<div class="active-profile">
+    Actief smaakprofiel:
+    <strong>
+        {{ active_profile.name if active_profile else "Geen profiel geselecteerd" }}
+    </strong>
+</div>
+
+<div class="top-bar">
+    <div class="right">
+        <button onclick="window.location.href='/profiles/'">Smaakprofielen</button>
+        <button onclick="window.location.href='/export/'">Export</button>
+        <button onclick="window.location.href='/upload/'">Upload</button>
+    </div>
+</div>
+
+<div class="tabs">
+    <button onclick="showTab('tab1')">Relevante resultaten</button>
+    <button onclick="showTab('tab2')">Scrape mislukt</button>
+</div>
+
+<div id="tab1" class="tab active">
+    {% include "tab1_relevant.html" %}
+</div>
+
+<div id="tab2" class="tab">
+    {% include "tab2_failed.html" %}
+</div>
+
+<script>
+function showTab(id) {
+    document.getElementById('tab1').classList.remove('active');
+    document.getElementById('tab2').classList.remove('active');
+    document.getElementById(id).classList.add('active');
+}
+</script>
+
+{% endblock %}

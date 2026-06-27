@@ -29,3 +29,9 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Lokale Surfer-opslag (eigen werk, geen broncode)
+*.db
+*.db-wal
+*.db-shm
+exports/

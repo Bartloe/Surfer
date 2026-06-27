@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Dashboard</h1>
+        <p>Actief profiel: {{ active_profile.name if active_profile else 'Geen' }}</p>
+        <div class="tabs">
+            <a href="/tab1">Relevante resultaten</a>
+            <a href="/tab2">Mislukte scrapes</a>
+            <a href="/profiles">Smaakprofielen</a>
+        </div>
+
+        <!-- START CRAWLER SECTIE -->
+        <div style="margin-top: 30px; border: 1px solid #ccc; padding: 15px; border-radius: 8px;">
+            <h3>Start Surfer</h3>
+            <label for="maxResults">Max resultaten per zoekterm:</label>
+            <input type="number" id="maxResults" value="10" min="1" max="50">
+            <button id="startCrawlBtn" style="margin-left: 10px;">Start Surfer</button>
+            <div id="crawlStatus" style="margin-top: 10px;"></div>
+        </div>
+
+        <!-- EXPORT SECTIE -->
+        <div style="margin-top: 30px; border: 1px solid #ccc; padding: 15px; border-radius: 8px;">
+            <h3>Export / Analyse</h3>
+            <button id="exportCsvBtn">Exporteer alle resultaten (CSV)</button>
+            <button id="analyseBtn">Analyse over tijd (demo)</button>
+            <div id="exportStatus" style="margin-top: 10px;"></div>
+        </div>
+    </div>
+
+    <script>
+        // Start crawler
+        document.getElementById('startCrawlBtn').addEventListener('click', function() {
+            var max = document.getElementById('maxResults').value;
+            var statusDiv = document.getElementById('crawlStatus');
+            statusDiv.innerHTML = '⏳ Bezig met starten...';
+
+            fetch('/api/start-crawl', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ max_results: parseInt(max) })
+            })
+            .then(response => response.json())
+            .then(data => {
+                statusDiv.innerHTML = '✅ ' + data.message;
+            })
+            .catch(error => {
+                statusDiv.innerHTML = '❌ Fout: ' + error;
+            });
+        });
+
+        // Export CSV
+        document.getElementById('exportCsvBtn').addEventListener('click', function() {
+            var statusDiv = document.getElementById('exportStatus');
+            statusDiv.innerHTML = '⏳ Download wordt voorbereid...';
+            fetch('/api/export-all')
+            .then(response => {
+                if (!response.ok) throw new Error('Network response was not ok');
+                return response.blob();
+            })
+            .then(blob => {
+                var url = window.URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = 'discoveries.csv';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                statusDiv.innerHTML = '✅ Download gestart.';
+            })
+            .catch(error => {
+                statusDiv.innerHTML = '❌ Fout: ' + error;
+            });
+        });
+
+        // Analyse (demo – toont een melding)
+        document.getElementById('analyseBtn').addEventListener('click', function() {
+            var statusDiv = document.getElementById('exportStatus');
+            statusDiv.innerHTML = '📊 Analyse: momenteel een demo – downloadt CSV voor handmatige analyse.';
+            // Voor nu doen we hetzelfde als export, maar je kunt hier later een echte analyse toevoegen.
+            document.getElementById('exportCsvBtn').click();
+        });
+    </script>
+</body>
+</html>
