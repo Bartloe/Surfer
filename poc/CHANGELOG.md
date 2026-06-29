@@ -2,6 +2,23 @@
 
 Alle noemenswaardige wijzigingen aan Surfer staan hier (Nederlands).
 
+## 2026-06-29 — Uitsluitingen worden nu écht gebruikt + zelftest hersteld
+
+### Gewijzigd
+- De `uitsluitingen` uit `SurferConfig` (al langer een veld, maar nergens gebruikt) gaan nu
+  als **zachte uitsluit-hint** mee in de DeepSeek-prompt van de voor-schifting: de beoordelaar
+  laat een serie alléén weg bij een duidelijke match, bij twijfel tóch insluiten (recall blijft
+  behouden — een afnemer doet de fijne controle). Zonder uitsluitingen blijft het promptblok
+  leeg (geen gedragsverandering). Blijft generiek: uitsluitingen zijn neutrale gewone-taal-
+  zinnen, geen afnemer-begrip; de nul-afnemer-check blijft groen.
+  - `beoordeling.py` v1.1, `pipeline.py` v1.2 (geeft `config.uitsluitingen` door).
+
+### Gefixt
+- Zelftest stond **rood** sinds de URL-dedup-commit: beide zoektermen kregen dezelfde nep-URL,
+  dus dedup scrapte die terecht één keer (2 vondsten) terwijl de test nog 4 verwachtte. De
+  nep-zoeker geeft nu een URL per zoekterm (happy-path = 4) plus een aparte dedup-test (twee
+  termen, één URL → 2 vondsten). Plus een test dat de uitsluit-hint in de prompt belandt.
+
 ## [Fase 0] 2026-06-27 — Opgeschoond tot een schone, losweekbare feeder
 
 Surfer is van proefversie teruggebracht tot één heldere feeder. Niets van de

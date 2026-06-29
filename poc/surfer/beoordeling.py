@@ -1,6 +1,12 @@
 """
 beoordeling — goedkope, ruime voor-schifting via DeepSeek.
 
+Versie: 1.1
+Reden:  Uitsluitingen uit de config worden nu écht gebruikt: een ZACHTE uitsluit-hint
+        in de prompt (alleen wegfilteren bij een duidelijke match; bij twijfel insluiten,
+        zodat de recall behouden blijft en een afnemer de fijne controle kan doen).
+Datum:  2026-06-29 (NL)
+
 Versie: 1.0
 Reden:  Fase 0 — prompt herschreven: recall + grove smaak + meerdere vondsten
         per pagina (listicles). Géén harde smaak-poort.
@@ -13,7 +19,9 @@ Datum:  2026-06-27 17:56 (NL)
     2) past dit GROFWEG bij het meegegeven profiel?      (grove smaak, 0-10)
   De grove smaak rangschikt alleen; hij filtert NOOIT weg.
 - Eén pagina mag MEERDERE vondsten opleveren (een "10 beste"-lijst telt mee).
-- profiel_tekst komt van buitenaf binnen; staat niet in deze module.
+- profiel_tekst + uitsluitingen komen van buitenaf binnen; staan niet in deze module.
+- uitsluitingen = neutrale gewone-taal-zinnen ("geen X-series"); een ZACHTE hint, geen
+  harde poort. Bij twijfel insluiten — wat hier wegvalt, ziet de afnemer nooit meer.
 """
 
 import json
@@ -23,7 +31,8 @@ import httpx
 
 
 class Beoordelaar(Protocol):
-    def beoordeel(self, titel: str, tekst: str, profiel_tekst: str) -> list[dict]:
+    def beoordeel(self, titel: str, tekst: str, profiel_tekst: str,
+                  uitsluitingen: list[str] | None = None) -> list[dict]:
         ...
 
 
@@ -38,8 +47,9 @@ class DeepSeekBeoordelaar:
         self.base_url = base_url
         self.timeout = timeout
 
-    def beoordeel(self, titel: str, tekst: str, profiel_tekst: str) -> list[dict]:
-        prompt = self._bouw_prompt(titel, tekst, profiel_tekst)
+    def beoordeel(self, titel: str, tekst: str, profiel_tekst: str,
+                  uitsluitingen: list[str] | None = None) -> list[dict]:
+        prompt = self._bouw_prompt(titel, tekst, profiel_tekst, uitsluitingen)
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -59,9 +69,20 @@ class DeepSeekBeoordelaar:
         inhoud = data["choices"][0]["message"]["content"]
         return self._lees_vondsten(inhoud)
 
-    def _bouw_prompt(self, titel: str, tekst: str, profiel_tekst: str) -> str:
+    def _bouw_prompt(self, titel: str, tekst: str, profiel_tekst: str,
+                     uitsluitingen: list[str] | None = None) -> str:
         tekst = (tekst or "")[:8000]
         profiel_blok = profiel_tekst.strip() or "(geen profiel meegegeven — beoordeel alleen op relevantie)"
+        schoon = [u.strip() for u in (uitsluitingen or []) if u and u.strip()]
+        if schoon:
+            regels = "\n".join(f"- {u}" for u in schoon)
+            uitsluit_blok = (
+                "\nLaat een serie alléén weg als die DUIDELIJK onder een van deze "
+                "uitsluitingen valt. Bij twijfel: tóch meenemen (een latere stap doet de "
+                "fijne controle). Sluit nooit uit op smaak — dit zijn harde categorieën:\n"
+                f"{regels}\n")
+        else:
+            uitsluit_blok = ""
         return f"""
 Bekijk deze webpagina en haal ALLE echte, NIEUWE tv-series eruit (uitgezonden in
 2026 of later, of nog te verschijnen). Eén pagina kan meerdere series noemen
@@ -77,7 +98,7 @@ Voor elke serie geef je twee losse oordelen:
 
 Profiel (smaakvoorkeur van de afnemer):
 {profiel_blok}
-
+{uitsluit_blok}
 Paginatitel: {titel}
 
 Paginatekst (eerste 8000 tekens):

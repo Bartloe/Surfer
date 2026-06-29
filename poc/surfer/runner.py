@@ -107,7 +107,7 @@ def _zelftest() -> int:
         pass
 
     class NepBeoordelaar:
-        def beoordeel(self, titel, tekst, profiel_tekst):
+        def beoordeel(self, titel, tekst, profiel_tekst, uitsluitingen=None):
             # Eén pagina -> twee vondsten (bewijst de listicle-winst).
             return [
                 {"titel": "Testserie A", "samenvatting": "x", "taal": "en",
@@ -117,7 +117,10 @@ def _zelftest() -> int:
             ]
 
     def nep_zoek(term, maxr):
-        return {"kandidaten": [{"titel": "p", "url": "https://example.com/lijst",
+        # Eén pagina per zoekterm, met een term-EIGEN URL: twee verschillende termen
+        # leveren twee verschillende pagina's -> beide worden gescrapet (de binnen-run
+        # URL-dedup grijpt alleen bij identieke URL's, zie test 1b).
+        return {"kandidaten": [{"titel": "p", "url": f"https://example.com/{term}",
                                 "fragment": "f"}], "fout": None}
 
     class NepScraper:
@@ -147,6 +150,20 @@ def _zelftest() -> int:
         if res["aantal_vondsten"] != 4:
             fouten.append(f"verwachtte 4 vondsten (listicle), kreeg {res['aantal_vondsten']}")
 
+        # 1b) Binnen-run URL-dedup: twee termen die DEZELFDE pagina opleveren ->
+        # die pagina één keer scrapen/beoordelen -> 2 vondsten i.p.v. 4.
+        opslag_dedup = Opslag(Path(tmp) / "dedup.db")
+        def zelfde_url(term, maxr):
+            return {"kandidaten": [{"titel": "p", "url": "https://example.com/zelfde",
+                                    "fragment": "f"}], "fout": None}
+        res_dedup = surf(SurferConfig(zoektermen=["a", "b"], deepseek_api_key="nep",
+                                      pauze_seconden=0, talen=["en"]),
+                         opslag_dedup, beoordelaar=NepBeoordelaar(), zoeker=zelfde_url,
+                         scraper=NepScraper(), extractor=nep_extract, log=lambda *a: None)
+        if res_dedup["aantal_vondsten"] != 2:
+            fouten.append("URL-dedup faalt: identieke pagina dubbel beoordeeld "
+                          f"({res_dedup['aantal_vondsten']} vondsten, verwachtte 2)")
+
         # 2) Dubbele-start-bescherming
         opslag.start_run()
         try:
@@ -168,6 +185,17 @@ def _zelftest() -> int:
                     scraper=NepScraper(), extractor=nep_extract, log=lambda *a: None)
         if res2["status"] != "gestopt":
             fouten.append(f"stop-vlag genegeerd: status was '{res2['status']}'")
+
+    # 3b) Uitsluitingen verschijnen als ZACHTE hint in de DeepSeek-prompt; zonder
+    # uitsluitingen blijft het blok leeg (geen regressie).
+    from .beoordeling import DeepSeekBeoordelaar
+    b = DeepSeekBeoordelaar(api_key="nep")
+    p_met = b._bouw_prompt("Titel", "tekst", "profiel", ["geen Reality-series"])
+    p_zonder = b._bouw_prompt("Titel", "tekst", "profiel", None)
+    if "geen Reality-series" not in p_met or "twijfel" not in p_met.lower():
+        fouten.append("uitsluit-hint ontbreekt of is niet zacht in de prompt")
+    if "geen Reality-series" in p_zonder:
+        fouten.append("lege uitsluitingen lekken toch in de prompt")
 
     # 4) Eénrichtingsregel: nul verwijzingen naar een afnemer in de Surfer-code
     raak = _scan_op_afnemer()

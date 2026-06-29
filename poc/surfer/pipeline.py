@@ -1,12 +1,14 @@
 """
 pipeline — de keten: zoeken -> scrapen -> extraheren -> beoordelen -> opslaan.
 
-Versie: 1.1
-Reden:  Binnen-run URL-dedup — verwante zoektermen leveren vaak dezelfde pagina op;
-        die nu één keer scrapen + beoordelen i.p.v. dubbel (kostenbesparing). Tussen
-        runs blijft herbezoek toegestaan (een pagina kan later nieuwe series tonen).
+Versie: 1.2
+Reden:  De uitsluitingen uit de config gaan nu mee naar de beoordelaar (zachte
+        uitsluit-hint in de prompt), zodat de grove voor-schifting duidelijke
+        ongewenste categorieën al vroeg laat liggen.
 Datum:  2026-06-29 (NL)
-Vorige: 1.0 (2026-06-27) — Fase 0: één heldere orkestratie i.p.v. een rauwe thread.
+Vorige: 1.1 (2026-06-29) — Binnen-run URL-dedup — verwante zoektermen leveren vaak
+        dezelfde pagina op; die nu één keer scrapen + beoordelen i.p.v. dubbel.
+        1.0 (2026-06-27) — Fase 0: één heldere orkestratie i.p.v. een rauwe thread.
 
 - surf() draait precies één run en geeft een korte samenvatting terug.
 - Alle bouwstenen zijn injecteerbaar (zoeker/scraper/extractor/beoordelaar):
@@ -121,7 +123,8 @@ def _verwerk_kandidaat(kandidaat, run_id, config, opslag,
 
     try:
         rauwe = beoordelaar.beoordeel(extractie.titel or kandidaat.get("titel", ""),
-                                      extractie.tekst, config.profiel_tekst)
+                                      extractie.tekst, config.profiel_tekst,
+                                      config.uitsluitingen)
     except Exception as e:
         opslag.bewaar_mislukt(run_id, url, f"beoordeling: {e}")
         return
