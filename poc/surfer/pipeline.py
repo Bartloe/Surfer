@@ -1,9 +1,12 @@
 """
 pipeline — de keten: zoeken -> scrapen -> extraheren -> beoordelen -> opslaan.
 
-Versie: 1.0
-Reden:  Fase 0 — één heldere orkestratie i.p.v. een rauwe thread zonder grip.
-Datum:  2026-06-27 17:56 (NL)
+Versie: 1.1
+Reden:  Binnen-run URL-dedup — verwante zoektermen leveren vaak dezelfde pagina op;
+        die nu één keer scrapen + beoordelen i.p.v. dubbel (kostenbesparing). Tussen
+        runs blijft herbezoek toegestaan (een pagina kan later nieuwe series tonen).
+Datum:  2026-06-29 (NL)
+Vorige: 1.0 (2026-06-27) — Fase 0: één heldere orkestratie i.p.v. een rauwe thread.
 
 - surf() draait precies één run en geeft een korte samenvatting terug.
 - Alle bouwstenen zijn injecteerbaar (zoeker/scraper/extractor/beoordelaar):
@@ -44,6 +47,12 @@ def surf(config: SurferConfig, opslag: Opslag, *, beoordelaar=None,
     run_id = opslag.start_run()
     log(f"[surf] run {run_id} gestart — {len(config.zoektermen)} zoekterm(en)")
     gestopt = False
+    # URL's die deze run al verwerkt zijn — verwante zoektermen leveren vaak dezelfde
+    # pagina op. Eén keer scrapen + door DeepSeek laten beoordelen i.p.v. per zoekterm
+    # opnieuw scheelt direct in kosten. Geldt binnen één run; tussen runs (her)bezoeken
+    # mag juist wél (een pagina kan later nieuwe series tonen).
+    bezocht: set[str] = set()
+    overgeslagen = 0
     try:
         for term in config.zoektermen:
             if opslag.stop_gevraagd(run_id):
@@ -58,6 +67,12 @@ def surf(config: SurferConfig, opslag: Opslag, *, beoordelaar=None,
                 if opslag.stop_gevraagd(run_id):
                     gestopt = True
                     break
+                url = (kandidaat.get("url") or "").strip()
+                if url and url in bezocht:
+                    overgeslagen += 1
+                    continue                       # deze run al gehad — niet dubbel scrapen
+                if url:
+                    bezocht.add(url)
                 _verwerk_kandidaat(kandidaat, run_id, config, opslag,
                                    scraper, extractor, beoordelaar, log)
                 time.sleep(config.pauze_seconden)
@@ -73,7 +88,8 @@ def surf(config: SurferConfig, opslag: Opslag, *, beoordelaar=None,
     samenvatting = opslag.laatste_run() or {}
     log(f"[surf] run {run_id} {status}: "
         f"{samenvatting.get('aantal_vondsten', 0)} vondsten, "
-        f"{samenvatting.get('aantal_mislukt', 0)} mislukt")
+        f"{samenvatting.get('aantal_mislukt', 0)} mislukt"
+        + (f", {overgeslagen} dubbele URL('s) overgeslagen" if overgeslagen else ""))
     return {
         "run_id": run_id,
         "status": status,
