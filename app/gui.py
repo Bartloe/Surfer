@@ -1,12 +1,12 @@
 """
 gui — het scherm van de stand-alone Surfer-app (customtkinter).
 
-Versie: 1.8
-Reden:  Bewaarde vondsten naar een eigen scherm. Twee tabs op de weergavebalk:
-        'Resultaten' (alleen de nog te beoordelen, nieuwe vondsten in batches) en
-        'Bewaard (N)' (alleen je keepers). Zo loopt het resultatenscherm niet meer vol
-        met een steeds groeiend bewaard-blok. Eerder (v1.7): knop 'Analyse zoektermen'.
-Datum:  2026-07-01 00:10 (NL)
+Versie: 1.9
+Reden:  Lange url's verborgen de score niet meer. De overbodige 'kopieer'-knop is weg
+        (het keuzemenu op de titel heeft al 'URL kopiëren'); de score wordt nu rechts in
+        de regel vastgepind, zodat een lange titel hem niet wegduwt. Eerder (v1.8):
+        bewaarde vondsten naar een eigen scherm (tabs Resultaten/Bewaard).
+Datum:  2026-07-01 00:40 (NL)
 
 - Bovenin: profiel kiezen/bewerken/nieuw, drempel + aantal, de zoekknop, en een
   weergavebalk met de tabs Resultaten/Bewaard, Sorteer + Per batch.
@@ -16,7 +16,8 @@ Datum:  2026-07-01 00:10 (NL)
 - Resultaten per blok: een pagina met daaronder de video's die erop staan (suburls);
   losse video-treffers staan op zichzelf.
 - Per regel: aankruisvak (bewaren) + 'wis' links, dan de klikbare titel (toont een
-  keuzemenu), 'kopieer' direct daarachter, en het DeepSeek-oordeel rechts.
+  keuzemenu met o.a. 'URL kopiëren'); de score staat rechts vastgepind en blijft ook
+  bij een lange titel zichtbaar. Het DeepSeek-oordeel staat in de rechterkolom.
 - Onderin: bulk-wissen links, status in het midden, bladeren rechtsonder.
 - Draaien:  .venv/Scripts/python.exe gui.py
 """
@@ -574,16 +575,14 @@ class App(ctk.CTk):
         else:
             ctk.CTkButton(kop, text="wis", width=48, fg_color=KLEUR_WIS,
                           command=lambda u=r["url"]: self._wis_een(u)).pack(side="left", padx=4)
+        # Score eerst rechts vastpinnen, zodat een lange titel hem niet wegduwt.
+        if r.get("score"):
+            ctk.CTkLabel(kop, text=f"{r['score']:.0f}", width=26).pack(side="right", padx=(4, 2))
         merk = {"video": "🎬", "pagina": "📄", "suburl": "🎬"}.get(r["type"], "•")
         ctk.CTkButton(kop, text=f"{merk}  {(r['titel'] or r['url'])[:95]}", anchor="w",
                       fg_color="transparent", text_color=KLEUR_LINK, hover=False,
                       command=lambda u=r["url"]: self._url_menu(u)
                       ).pack(side="left", fill="x", expand=True, padx=4)
-        # 'kopieer' direct rechts van de titel.
-        ctk.CTkButton(kop, text="kopieer", width=64,
-                      command=lambda u=r["url"]: self._kopieer(u)).pack(side="left", padx=4)
-        if r.get("score"):
-            ctk.CTkLabel(kop, text=f"{r['score']:.0f}", width=26).pack(side="left", padx=(4, 0))
 
         url_lbl = ctk.CTkLabel(links, text=r["url"], text_color="gray", anchor="nw",
                                justify="left", font=ctk.CTkFont(size=10))
@@ -609,7 +608,7 @@ class App(ctk.CTk):
 
     def _subrij(self, parent, s):
         # Eén strakke regel per video: aanvinkvakje + 'wis' links, dan de klikbare
-        # titel, daarachter 'kopieer'.
+        # titel die de rest van de breedte vult (kopiëren zit in het titel-keuzemenu).
         klein = ctk.CTkFont(size=11)
         rij = ctk.CTkFrame(parent, fg_color="transparent", height=26)
         rij.pack(fill="x", padx=(28, 6), pady=0)
@@ -626,8 +625,6 @@ class App(ctk.CTk):
                       text_color=KLEUR_LINK, hover=False,
                       command=lambda u=s["url"]: self._url_menu(u)
                       ).pack(side="left", fill="x", expand=True, padx=4)
-        ctk.CTkButton(rij, text="kopieer", width=58, height=24, font=klein,
-                      command=lambda u=s["url"]: self._kopieer(u)).pack(side="left", padx=2)
 
 
 if __name__ == "__main__":

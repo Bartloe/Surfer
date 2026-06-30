@@ -2,6 +2,17 @@
 
 Alle noemenswaardige wijzigingen aan dit project staan hier (Nederlands).
 
+## 2026-07-01 (nacht) — lange url verbergt de score niet meer (`app/` gui.py v1.9)
+
+### Opgelost — score blijft zichtbaar + overbodige knop weg
+- Bij een lange titel/url verdween de score onder de 'kopieer'-knop en werd die knop
+  in elkaar gedrukt. De score wordt nu **rechts in de regel vastgepind** (eerst
+  geplaatst), zodat de titel alleen de ruimte ertussen vult en de score altijd in beeld
+  blijft.
+- De **'kopieer'-knop is verwijderd** (hoofd- en subregels): hij was een overblijfsel van
+  vóór het titel-keuzemenu, dat al 'URL kopiëren' bevat. De `_kopieer`-functie blijft
+  bestaan voor dat menu.
+
 ## 2026-07-01 (nacht) — bewaarde vondsten naar een eigen scherm (`app/` gui.py v1.8)
 
 ### Gewijzigd — Resultaten en Bewaard gescheiden
