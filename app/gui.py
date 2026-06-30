@@ -1,15 +1,15 @@
 """
 gui — het scherm van de stand-alone Surfer-app (customtkinter).
 
-Versie: 1.7
-Reden:  Knop 'Analyse zoektermen' toegevoegd (weergavebalk, rechts): opent een venster
-        met de tabel welke zoektermen de meeste bewaarde vondsten opleveren (en welke
-        vooral ruis geven). Eerder (v1.6): AI-oordeel op titelhoogte + tekst groeit mee
-        met de vensterbreedte; url-keuzemenu (browser/privévenster/kopiëren).
-Datum:  2026-06-30 23:30 (NL)
+Versie: 1.8
+Reden:  Bewaarde vondsten naar een eigen scherm. Twee tabs op de weergavebalk:
+        'Resultaten' (alleen de nog te beoordelen, nieuwe vondsten in batches) en
+        'Bewaard (N)' (alleen je keepers). Zo loopt het resultatenscherm niet meer vol
+        met een steeds groeiend bewaard-blok. Eerder (v1.7): knop 'Analyse zoektermen'.
+Datum:  2026-07-01 00:10 (NL)
 
 - Bovenin: profiel kiezen/bewerken/nieuw, drempel + aantal, de zoekknop, en een
-  weergavebalk met Sorteer + Per batch.
+  weergavebalk met de tabs Resultaten/Bewaard, Sorteer + Per batch.
 - Live verloop verschijnt alleen tijdens een run en verdwijnt zodra de resultaten
   klaarstaan (bewust niet live bijwerken: dat zou met sorteren-op-score onrustig
   springen).
@@ -38,6 +38,8 @@ ctk.set_default_color_theme("blue")
 
 KLEUR_LINK = "#4ea1ff"
 KLEUR_WIS = "#7a2e2e"
+KLEUR_TAB_AAN = "#1f6aa5"      # actieve tab (gevuld blauw)
+KLEUR_TAB_UIT = "gray30"       # inactieve tab (gedempt)
 
 
 def _incognito_kandidaten() -> list[tuple[str, str]]:
@@ -66,6 +68,7 @@ class App(ctk.CTk):
         self._stop = False
         self._bezig = False
 
+        self.weergave = "resultaten"      # "resultaten" (nieuwe vondsten) of "bewaard" (keepers)
         self.sorteer = "score"            # "score" (hoogste eerst) of "run" (laatste run eerst)
         self.batch_offset = 0             # bij welke eenheid het zichtbare blok begint
         self._batch_historie: list[int] = []
@@ -111,6 +114,15 @@ class App(ctk.CTk):
         balk.pack(fill="x", padx=10, pady=(0, 4))
         self.balk_weergave = balk
 
+        # Links: schakelen tussen de twee schermen. De keepers staan voortaan apart,
+        # zodat het resultatenscherm niet volloopt met een groeiend bewaard-blok.
+        self.knop_tab_res = ctk.CTkButton(balk, text="Resultaten", width=110,
+                                          command=lambda: self._wissel_weergave("resultaten"))
+        self.knop_tab_res.pack(side="left", padx=(8, 2))
+        self.knop_tab_bew = ctk.CTkButton(balk, text="Bewaard (0)", width=120,
+                                          command=lambda: self._wissel_weergave("bewaard"))
+        self.knop_tab_bew.pack(side="left", padx=(0, 16))
+
         ctk.CTkLabel(balk, text="Sorteer:").pack(side="left", padx=(8, 2))
         self.sorteer_menu = ctk.CTkOptionMenu(
             balk, values=["Hoogste score", "Laatste run"], width=150,
@@ -154,10 +166,12 @@ class App(ctk.CTk):
     def _bouw_onderbalk(self):
         balk = ctk.CTkFrame(self)
         balk.pack(fill="x", padx=10, pady=(4, 10))
-        ctk.CTkButton(balk, text="Wis getoonde (niet-bewaard)", fg_color=KLEUR_WIS,
-                      command=self._wis_batch).pack(side="left", padx=6)
-        ctk.CTkButton(balk, text="Wis alles van laatste run", fg_color=KLEUR_WIS,
-                      command=self._wis_run).pack(side="left", padx=6)
+        self.knop_wis_batch = ctk.CTkButton(balk, text="Wis getoonde (niet-bewaard)",
+                                            fg_color=KLEUR_WIS, command=self._wis_batch)
+        self.knop_wis_batch.pack(side="left", padx=6)
+        self.knop_wis_run = ctk.CTkButton(balk, text="Wis alles van laatste run",
+                                          fg_color=KLEUR_WIS, command=self._wis_run)
+        self.knop_wis_run.pack(side="left", padx=6)
 
         # Rechtsonder: bladeren door de batches.
         self.knop_volgende = ctk.CTkButton(balk, text="Volgende ▶", width=90,
@@ -230,6 +244,7 @@ class App(ctk.CTk):
             maxn = 12
         self._bezig = True
         self._stop = False
+        self.weergave = "resultaten"      # verse vondsten meteen in beeld
         self.zoek_knop.configure(state="disabled")
         self.stop_knop.configure(state="normal")
         self._toon_log(True)
@@ -280,6 +295,7 @@ class App(ctk.CTk):
         if self.winkel:
             self.winkel.zet_status(url, "bewaard" if var.get() else "nieuw")
             self.winkel.bewaar()
+            self._werk_tabs_bij()         # teller bijwerken, zonder de regel te verspringen
 
     def _url_menu(self, url):
         # Klikken op een titel opent niet meteen, maar laat je kiezen. De url blijft
@@ -362,30 +378,26 @@ class App(ctk.CTk):
         for w in self.lijst.winfo_children():
             w.destroy()
         self._huidige_batch_units = []
+        self._werk_tabs_bij()
+        self._stel_onderbalk_in()
         if not self.winkel:
             self._update_batchbalk(0, 0, 0)
             return
+        if self.weergave == "bewaard":
+            self._teken_bewaard()
+        else:
+            self._teken_resultaten()
+
+    def _teken_resultaten(self):
+        """Alleen de nog te beoordelen (nieuwe) vondsten, in eenheden (pagina + video's
+        eronder horen bij elkaar), gesorteerd en in batches van N getoond."""
         actief = self.winkel.actieve()
-        if not actief:
-            ctk.CTkLabel(self.lijst, text="(nog geen resultaten — kies een profiel en zoek)"
-                         ).pack(pady=20)
-            self._update_batchbalk(0, 0, 0)
-            return
-
-        # 1) Bewaarde vondsten staan apart bovenaan (jouw keepers, altijd in beeld).
-        bewaard = [r for r in actief if r["status"] == "bewaard"]
-        if bewaard:
-            blok = self._blok()
-            ctk.CTkLabel(blok, text=f"✅ Bewaard ({len(bewaard)})", anchor="w"
-                         ).pack(fill="x", padx=6, pady=(4, 2))
-            for r in bewaard:
-                self._subrij(blok, r)
-
-        # 2) Nieuwe vondsten: in eenheden (pagina + video's eronder horen bij elkaar),
-        #    gesorteerd, en in batches van N getoond.
         units = self._sorteer_units(self._maak_units(
             [r for r in actief if r["status"] == "nieuw"]))
         if not units:
+            ctk.CTkLabel(self.lijst,
+                         text="(geen nieuwe vondsten — start een zoekopdracht, of kijk bij Bewaard)"
+                         ).pack(pady=20)
             self._update_batchbalk(0, 0, 0)
             return
 
@@ -399,6 +411,52 @@ class App(ctk.CTk):
             i += 1
         self._volgende_offset = i
         self._update_batchbalk(start, i, len(units))
+
+    def _teken_bewaard(self):
+        """Alleen de keepers, op hun eigen scherm: alles in één keer, gesorteerd.
+        Uitvinken haalt iets weer uit 'bewaard'; de regel blijft staan tot je verder
+        gaat (volgende run, bladeren of van tab wisselen)."""
+        bewaard = [r for r in self.winkel.actieve() if r["status"] == "bewaard"]
+        if not bewaard:
+            ctk.CTkLabel(self.lijst,
+                         text="(nog niets bewaard — vink vondsten aan op het tabblad Resultaten)"
+                         ).pack(pady=20)
+            return
+        for u in self._sorteer_units(self._maak_units(bewaard)):
+            self._render_unit(u)
+
+    # -- weergave-tabs --------------------------------------------------------
+    def _wissel_weergave(self, naam: str):
+        if naam == self.weergave:
+            return
+        self.weergave = naam
+        self.batch_offset = 0
+        self._batch_historie.clear()
+        self._teken()
+
+    def _werk_tabs_bij(self):
+        """Tab-knoppen bijwerken: het aantal keepers tonen en de actieve tab markeren."""
+        aantal = 0
+        if self.winkel:
+            aantal = sum(1 for r in self.winkel.resultaten.values()
+                         if r["status"] == "bewaard")
+        self.knop_tab_bew.configure(text=f"Bewaard ({aantal})")
+        self.knop_tab_res.configure(
+            fg_color=KLEUR_TAB_AAN if self.weergave == "resultaten" else KLEUR_TAB_UIT)
+        self.knop_tab_bew.configure(
+            fg_color=KLEUR_TAB_AAN if self.weergave == "bewaard" else KLEUR_TAB_UIT)
+
+    def _stel_onderbalk_in(self):
+        """De batch-navigatie en bulk-wisknoppen horen bij Resultaten; op het
+        Bewaard-scherm zetten we ze uit zodat ze niet verwarren."""
+        in_bewaard = self.weergave == "bewaard"
+        staat = "disabled" if in_bewaard else "normal"
+        self.knop_wis_batch.configure(state=staat)
+        self.knop_wis_run.configure(state=staat)
+        if in_bewaard:
+            self.knop_vorige.configure(state="disabled")
+            self.knop_volgende.configure(state="disabled")
+            self.batch_info.configure(text="")
 
     # -- batch-helpers --------------------------------------------------------
     def _batch_grootte(self) -> int:

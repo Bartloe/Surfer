@@ -2,6 +2,20 @@
 
 Alle noemenswaardige wijzigingen aan dit project staan hier (Nederlands).
 
+## 2026-07-01 (nacht) — bewaarde vondsten naar een eigen scherm (`app/` gui.py v1.8)
+
+### Gewijzigd — Resultaten en Bewaard gescheiden
+- Het resultatenscherm liep op den duur vol met een steeds groeiend bewaard-blok
+  bovenaan, waardoor de nieuwe (nog te beoordelen) vondsten werden weggeduwd.
+- **Twee tabs op de weergavebalk** (`gui.py` v1.8): *Resultaten* toont alléén de nieuwe
+  vondsten (in batches); *Bewaard (N)* toont alléén je keepers op een eigen scherm. De
+  teller op de tab loopt meteen mee bij elk aan-/uitvinken.
+- Een vondst die je aanvinkt blijft op het Resultaten-scherm staan tot je verder gaat
+  (volgende run, bladeren of van tab wisselen) — zo verspringt de lijst niet onder je
+  muis. Op het Bewaard-scherm haal je iets weer uit bewaard door het uit te vinken.
+- De batch-navigatie en de bulk-wisknoppen horen bij Resultaten en staan op het
+  Bewaard-scherm uit. Alleen `gui.py` aangepast; de datalaag is ongemoeid.
+
 ## 2026-06-30 (nacht) — zoekterm-analyse (welke termen leveren het meeste op)
 
 ### Nieuw — analyse van de zoektermen
