@@ -1,0 +1,7 @@
+customtkinter
+ddgs
+selectolax
+requests
+httpx
+python-dotenv
+langdetect
