@@ -1,12 +1,12 @@
 """
 gui — het scherm van de stand-alone Surfer-app (customtkinter).
 
-Versie: 1.4
-Reden:  Twee verzoeken: (1) klikken op een url opent niet meer meteen, maar toont
-        een keuzemenu (Openen in browser / Openen in privévenster / URL kopiëren);
-        (2) het AI-oordeel begint nu bovenaan, op dezelfde hoogte als de url in het
-        linkerpaneel, zodat elke serie minder regels in beslag neemt.
-Datum:  2026-06-30 22:45 (NL)
+Versie: 1.5
+Reden:  Lettertype van het url-keuzemenu verdubbeld (beter leesbaar). Eerder (v1.4):
+        (1) klikken op een url toont een keuzemenu (Openen in browser / Openen in
+        privévenster / URL kopiëren); (2) het AI-oordeel begint op dezelfde hoogte
+        als de url in het linkerpaneel, zodat elke serie minder regels inneemt.
+Datum:  2026-06-30 22:52 (NL)
 
 - Bovenin: profiel kiezen/bewerken/nieuw, drempel + aantal, de zoekknop, en een
   weergavebalk met Sorteer + Per batch.
@@ -279,7 +279,7 @@ class App(ctk.CTk):
     def _url_menu(self, url):
         # Klikken op een titel opent niet meteen, maar laat je kiezen. De url blijft
         # altijd in de lijst staan; weghalen doe je bewust met 'wis'.
-        menu = tkinter.Menu(self, tearoff=0)
+        menu = tkinter.Menu(self, tearoff=0, font=("Segoe UI", 18))
         menu.add_command(label="Openen in browser", command=lambda: self._open(url))
         menu.add_command(label="Openen in privévenster",
                          command=lambda: self._open_incognito(url))
