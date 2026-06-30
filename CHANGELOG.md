@@ -4,6 +4,21 @@ Alle noemenswaardige wijzigingen aan dit project staan hier (Nederlands).
 
 ## 2026-06-30
 
+### Gewijzigd — stand-alone app (`app/`), eerste gebruikersronde
+- **Live verloop:** nieuw venster onder de knoppen dat tijdens een run per stap
+  toont wat er gebeurt (zoeken, ophalen, beoordelen, bewaard, valt af). Voorheen
+  zag je alleen "Bezig…". (`kern.py` v1.1 logt per stap, `gui.py` v1.1 toont het.)
+- **Aanklikken wist niets meer:** een url openen is bladeren — de browser opent en
+  de regel blijft staan. Weghalen doe je bewust met *wis* of *wis hele pagina*.
+  (De status 'bezocht' verdwijnt daarmee uit het gedrag.)
+- **Kopieer-knop** per regel: url naar het klembord (naast aanklikken).
+- **Betere video-titels** van rijke pagina's (bv. Ziggo-samenvattingen): de echte
+  omschrijving komt nu uit aria-label/title/alt; een kaal label "video" valt weg en
+  toont anders de url. (`graafwerk.py` v1.1.)
+- **Compacte video-regels:** elke video onder een pagina (en losse weesvideo's) staat
+  nu op één strakke regel i.p.v. een groot blok.
+- 'wis blok' heet nu **'wis hele pagina'** (duidelijker: pagina + de video's erop).
+
 ### Toegevoegd — stand-alone app (`app/`)
 - Zelfstandige Surfer-app om per onderwerp (profiel) gericht **video's** te zoeken,
   ze door DeepSeek te laten beoordelen en de interessante treffers te bewaren.

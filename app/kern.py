@@ -1,9 +1,10 @@
 """
 kern — orkestratie van één zoekronde voor een profiel.
 
-Versie: 1.0
-Reden:  Eerste versie — koppelt graafwerk + DeepSeek-oordeel + opslag tot één run.
-Datum:  2026-06-30 19:18 (NL)
+Versie: 1.1
+Reden:  Live meekijken — per stap een duidelijke logregel (zoeken/ophalen/beoordelen/
+        bewaard/te laag), zodat het scherm toont welke actie loopt.
+Datum:  2026-06-30 19:59 (NL)
 
 Per run, per zoekterm:
   1. directe video's zoeken  -> elk apart door DeepSeek laten beoordelen;
@@ -52,36 +53,49 @@ def run(profiel: str, *, drempel: float = 6.0, max_per_term: int = 12,
                 break
             if voortgang:
                 voortgang(i, len(zoektermen), term)
+            log(f"[surf] zoekterm {i}/{len(zoektermen)}: '{term}'")
 
             # 1) directe video-treffers
-            for t in graafwerk.zoek_videos(term, max_per_term):
+            video_treffers = graafwerk.zoek_videos(term, max_per_term)
+            log(f"[surf]   {len(video_treffers)} video-treffer(s) gevonden, beoordelen…")
+            for t in video_treffers:
                 if stop and stop():
                     break
                 if winkel.is_gezien(t.url):
                     continue
                 winkel.markeer_gezien(t.url)
+                log(f"[surf]   beoordeel video: {(t.titel or t.url)[:70]}")
                 res = oordelaar.beoordeel(t.titel, t.fragment, context)
                 if res["past"] and res["score"] >= drempel:
                     winkel.voeg_resultaat(t.url, t.titel, "video", run_id,
                                           res["samenvatting"], res["oordeel"], res["score"])
                     nieuw += 1
+                    log(f"[surf]   ✓ bewaard (score {res['score']:.0f})")
+                else:
+                    log(f"[surf]   ✗ valt af (score {res['score']:.0f}, drempel {drempel:.0f})")
 
             # 2) webpagina's -> video's eraf halen
-            for p in graafwerk.zoek_paginas(term, max_per_term):
+            pagina_treffers = graafwerk.zoek_paginas(term, max_per_term)
+            log(f"[surf]   {len(pagina_treffers)} webpagina('s) gevonden, ophalen…")
+            for p in pagina_treffers:
                 if stop and stop():
                     break
                 if winkel.is_gezien(p.url):
                     continue
                 winkel.markeer_gezien(p.url)
+                log(f"[surf]   pagina ophalen: {p.url[:70]}")
                 pagina = graafwerk.haal_pagina(p.url)
                 if pagina["fout"]:
+                    log(f"[surf]   – overgeslagen ({pagina['fout']})")
                     continue
                 res = oordelaar.beoordeel(pagina["titel"] or p.titel, pagina["tekst"], context)
                 if not (res["past"] and res["score"] >= drempel):
+                    log(f"[surf]   ✗ valt af (score {res['score']:.0f}, drempel {drempel:.0f})")
                     continue
                 winkel.voeg_resultaat(p.url, pagina["titel"] or p.titel, "pagina", run_id,
                                       res["samenvatting"], res["oordeel"], res["score"])
                 nieuw += 1
+                eraf = 0
                 for v in graafwerk.videos_op_pagina(pagina["html"], p.url):
                     if winkel.is_gezien(v.url):
                         continue
@@ -90,6 +104,8 @@ def run(profiel: str, *, drempel: float = 6.0, max_per_term: int = 12,
                                           "(video gevonden op de bovenstaande pagina)",
                                           "", res["score"], parent_url=p.url)
                     nieuw += 1
+                    eraf += 1
+                log(f"[surf]   ✓ pagina bewaard (score {res['score']:.0f}) + {eraf} video('s) eraf")
     finally:
         winkel.bewaar()
 

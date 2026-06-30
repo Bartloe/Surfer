@@ -9,8 +9,9 @@ Datum:  2026-06-30 19:18 (NL)
 - Per profiel één werkbestand resultaten/<profiel>.json met:
     * gezien_urls : elke url die ooit is opgehaald/getoond -> nooit 2x bezoeken.
     * resultaten  : alle vondsten met hun status.
-- Statussen: 'nieuw' (te beoordelen), 'bewaard' (aangevinkt), 'geskipt' (weg),
-  'bezocht' (door de gebruiker geopend -> valt uit de export).
+- Statussen: 'nieuw' (te beoordelen), 'bewaard' (aangevinkt), 'geskipt' (weg).
+  Aanklikken opent alleen de browser en verandert de status NIET; weghalen gaat
+  bewust via 'wis' (één regel) of 'wis hele pagina' (pagina + video's erop).
 - Bij elke opslag wordt resultaten/<profiel>_bewaard.json ververst: de schone
   oogst met alleen de bewaarde, nog niet bezochte urls (de "export").
 - Een resultaat met type 'suburl' hoort bij een pagina via parent_url; pagina +

@@ -1,16 +1,19 @@
 """
 gui — het scherm van de stand-alone Surfer-app (customtkinter).
 
-Versie: 1.0
-Reden:  Eerste versie — profielen onderhouden, zoeken, resultaten tonen/afhandelen.
-Datum:  2026-06-30 19:18 (NL)
+Versie: 1.1
+Reden:  Meekijken + minder verrassingen — live activiteitenvenster tijdens een run,
+        kopieer-knop per url, aanklikken opent alleen de browser (wist niets meer),
+        een duidelijkere 'wis hele pagina'-knop, en compacte video-regels (1 regel).
+Datum:  2026-06-30 19:59 (NL)
 
 - Bovenin: profiel kiezen/bewerken/nieuw, drempel + aantal, en de zoekknop.
+- Live venster onder de knoppen: toont tijdens een run welke stap loopt.
 - Resultaten per blok: een pagina met daaronder de video's die erop staan (suburls);
   losse video-treffers staan op zichzelf.
-- Per regel: aankruisvak (bewaren), klikbare url (opent browser + markeert 'bezocht'),
-  het DeepSeek-oordeel rechts, de samenvatting links.
-- Bulk: 'wis blok' (pagina + suburls) en 'wis alles van laatste run'.
+- Per regel: aankruisvak (bewaren), klikbare url (opent ALLEEN de browser), een
+  kopieer-knop (url naar klembord), het DeepSeek-oordeel rechts, samenvatting links.
+- Bulk: 'wis hele pagina' (pagina + video's erop) en 'wis alles van laatste run'.
 - Draaien:  .venv/Scripts/python.exe gui.py
 """
 
@@ -41,6 +44,7 @@ class App(ctk.CTk):
 
         self._bouw_bovenbalk()
         self._bouw_resultaten()
+        self._bouw_log()
         self._bouw_onderbalk()
         self._herlaad_profielen()
 
@@ -74,6 +78,21 @@ class App(ctk.CTk):
     def _bouw_resultaten(self):
         self.lijst = ctk.CTkScrollableFrame(self, label_text="Resultaten")
         self.lijst.pack(fill="both", expand=True, padx=10, pady=4)
+
+    def _bouw_log(self):
+        kader = ctk.CTkFrame(self)
+        kader.pack(fill="x", padx=10, pady=(0, 4))
+        ctk.CTkLabel(kader, text="Live verloop", anchor="w").pack(fill="x", padx=8, pady=(4, 0))
+        self.log_box = ctk.CTkTextbox(kader, height=150, wrap="none",
+                                      font=ctk.CTkFont(size=11))
+        self.log_box.pack(fill="x", padx=8, pady=(2, 8))
+        self.log_box.configure(state="disabled")
+
+    def _log(self, tekst):
+        self.log_box.configure(state="normal")
+        self.log_box.insert("end", tekst + "\n")
+        self.log_box.see("end")
+        self.log_box.configure(state="disabled")
 
     def _bouw_onderbalk(self):
         balk = ctk.CTkFrame(self)
@@ -143,13 +162,16 @@ class App(ctk.CTk):
         self._stop = False
         self.zoek_knop.configure(state="disabled")
         self.stop_knop.configure(state="normal")
+        self.log_box.configure(state="normal")
+        self.log_box.delete("1.0", "end")
+        self.log_box.configure(state="disabled")
         self._status("Bezig met zoeken…")
         threading.Thread(target=self._run_thread,
                          args=(self.profiel_var.get(), drempel, maxn), daemon=True).start()
 
     def _run_thread(self, profiel, drempel, maxn):
         def log(m):
-            self.after(0, self._status, m)
+            self.after(0, self._log, m)
 
         def voortgang(i, n, term):
             self.after(0, self._status, f"Zoekterm {i}/{n}: {term}")
@@ -188,11 +210,15 @@ class App(ctk.CTk):
             self.winkel.bewaar()
 
     def _open(self, url):
+        # Aanklikken = bladeren: alleen de browser openen. De url blijft staan;
+        # weghalen doe je bewust met 'wis' of 'wis hele pagina'.
         webbrowser.open(url)
-        if self.winkel:
-            self.winkel.zet_status(url, "bezocht")
-            self.winkel.bewaar()
-            self._teken()
+        self._status("Geopend in de browser (url blijft in de lijst staan).")
+
+    def _kopieer(self, url):
+        self.clipboard_clear()
+        self.clipboard_append(url)
+        self._status("URL naar het klembord gekopieerd.")
 
     def _wis_een(self, url):
         if self.winkel:
@@ -240,9 +266,11 @@ class App(ctk.CTk):
                 getoond.add(s["url"])
         for v in videos:
             self._hoofdrij(self._blok(), v, wis_blok=False)
-        for s in suburls:                       # wees-suburls (ouder al weg)
-            if s["url"] not in getoond:
-                self._hoofdrij(self._blok(), s, wis_blok=False)
+        wezen = [s for s in suburls if s["url"] not in getoond]  # ouder al weg
+        if wezen:
+            blok = self._blok()
+            for s in wezen:
+                self._subrij(blok, s)          # ook compact: één regel per video
 
         if not actief:
             ctk.CTkLabel(self.lijst, text="(nog geen resultaten — kies een profiel en zoek)"
@@ -268,8 +296,10 @@ class App(ctk.CTk):
                       ).pack(side="left", fill="x", expand=True, padx=4)
         if r.get("score"):
             ctk.CTkLabel(kop, text=f"{r['score']:.0f}", width=26).pack(side="left")
+        ctk.CTkButton(kop, text="kopieer", width=64,
+                      command=lambda u=r["url"]: self._kopieer(u)).pack(side="left", padx=4)
         if wis_blok:
-            ctk.CTkButton(kop, text="wis blok", width=72, fg_color=KLEUR_WIS,
+            ctk.CTkButton(kop, text="wis hele pagina", width=110, fg_color=KLEUR_WIS,
                           command=lambda u=r["url"]: self._wis_blok(u)).pack(side="left", padx=4)
         else:
             ctk.CTkButton(kop, text="wis", width=48, fg_color=KLEUR_WIS,
@@ -288,18 +318,25 @@ class App(ctk.CTk):
                      anchor="nw", text_color="#cfcfcf").grid(row=0, column=1, sticky="nwe")
 
     def _subrij(self, parent, s):
-        rij = ctk.CTkFrame(parent, fg_color="transparent")
-        rij.pack(fill="x", padx=(34, 6), pady=1)
+        # Eén strakke regel per video: aanvinkvakje, klikbare titel, kopieer, wis.
+        klein = ctk.CTkFont(size=11)
+        rij = ctk.CTkFrame(parent, fg_color="transparent", height=26)
+        rij.pack(fill="x", padx=(28, 6), pady=0)
+        rij.pack_propagate(False)
         var = ctk.BooleanVar(value=(s["status"] == "bewaard"))
-        ctk.CTkCheckBox(rij, text="bewaar", width=70, variable=var,
+        ctk.CTkCheckBox(rij, text="", width=22, checkbox_width=16, checkbox_height=16,
+                        variable=var,
                         command=lambda u=s["url"], v=var: self._bewaar_toggle(u, v)
                         ).pack(side="left")
-        ctk.CTkButton(rij, text=f"🎬  {(s['titel'] or s['url'])[:95]}", anchor="w",
-                      fg_color="transparent", text_color=KLEUR_LINK, hover=False,
+        ctk.CTkButton(rij, text=f"🎬  {(s['titel'] or s['url'])[:110]}", anchor="w",
+                      height=24, font=klein, fg_color="transparent",
+                      text_color=KLEUR_LINK, hover=False,
                       command=lambda u=s["url"]: self._open(u)
                       ).pack(side="left", fill="x", expand=True, padx=4)
-        ctk.CTkButton(rij, text="wis", width=48, fg_color=KLEUR_WIS,
-                      command=lambda u=s["url"]: self._wis_een(u)).pack(side="left", padx=4)
+        ctk.CTkButton(rij, text="kopieer", width=58, height=24, font=klein,
+                      command=lambda u=s["url"]: self._kopieer(u)).pack(side="left", padx=2)
+        ctk.CTkButton(rij, text="wis", width=40, height=24, font=klein, fg_color=KLEUR_WIS,
+                      command=lambda u=s["url"]: self._wis_een(u)).pack(side="left", padx=2)
 
 
 if __name__ == "__main__":
