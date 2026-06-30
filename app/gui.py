@@ -1,12 +1,12 @@
 """
 gui — het scherm van de stand-alone Surfer-app (customtkinter).
 
-Versie: 1.3
-Reden:  Indeling opgeschoond op verzoek — sorteren/per-batch bovenaan; bladeren
-        (Vorige/Volgende) rechtsonder; per regel 'wis' links (naast bewaar) en
-        'kopieer' direct rechts van de titel; live verloop alleen tijdens een run
-        en daarna automatisch weg (zo komen de resultaten rustig in beeld).
-Datum:  2026-06-30 21:25 (NL)
+Versie: 1.4
+Reden:  Twee verzoeken: (1) klikken op een url opent niet meer meteen, maar toont
+        een keuzemenu (Openen in browser / Openen in privévenster / URL kopiëren);
+        (2) het AI-oordeel begint nu bovenaan, op dezelfde hoogte als de url in het
+        linkerpaneel, zodat elke serie minder regels in beslag neemt.
+Datum:  2026-06-30 22:45 (NL)
 
 - Bovenin: profiel kiezen/bewerken/nieuw, drempel + aantal, de zoekknop, en een
   weergavebalk met Sorteer + Per batch.
@@ -15,13 +15,16 @@ Datum:  2026-06-30 21:25 (NL)
   springen).
 - Resultaten per blok: een pagina met daaronder de video's die erop staan (suburls);
   losse video-treffers staan op zichzelf.
-- Per regel: aankruisvak (bewaren) + 'wis' links, dan de klikbare titel (opent
-  ALLEEN de browser), 'kopieer' direct daarachter, en het DeepSeek-oordeel rechts.
+- Per regel: aankruisvak (bewaren) + 'wis' links, dan de klikbare titel (toont een
+  keuzemenu), 'kopieer' direct daarachter, en het DeepSeek-oordeel rechts.
 - Onderin: bulk-wissen links, status in het midden, bladeren rechtsonder.
 - Draaien:  .venv/Scripts/python.exe gui.py
 """
 
+import os
+import subprocess
 import threading
+import tkinter
 import webbrowser
 
 import customtkinter as ctk
@@ -34,6 +37,22 @@ ctk.set_default_color_theme("blue")
 
 KLEUR_LINK = "#4ea1ff"
 KLEUR_WIS = "#7a2e2e"
+
+
+def _incognito_kandidaten() -> list[tuple[str, str]]:
+    """Bekende browser-paden op Windows met hun privé-vlag, hoogste voorkeur eerst.
+    Geeft alleen de paden terug die echt bestaan."""
+    pf = os.environ.get("ProgramFiles", r"C:\Program Files")
+    pfx86 = os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")
+    lad = os.environ.get("LOCALAPPDATA", "")
+    mogelijk = [
+        (os.path.join(pf, r"Google\Chrome\Application\chrome.exe"), "--incognito"),
+        (os.path.join(pfx86, r"Google\Chrome\Application\chrome.exe"), "--incognito"),
+        (os.path.join(lad, r"Google\Chrome\Application\chrome.exe"), "--incognito"),
+        (os.path.join(pfx86, r"Microsoft\Edge\Application\msedge.exe"), "--inprivate"),
+        (os.path.join(pf, r"Microsoft\Edge\Application\msedge.exe"), "--inprivate"),
+    ]
+    return [(exe, vlag) for exe, vlag in mogelijk if exe and os.path.exists(exe)]
 
 
 class App(ctk.CTk):
@@ -257,11 +276,35 @@ class App(ctk.CTk):
             self.winkel.zet_status(url, "bewaard" if var.get() else "nieuw")
             self.winkel.bewaar()
 
+    def _url_menu(self, url):
+        # Klikken op een titel opent niet meteen, maar laat je kiezen. De url blijft
+        # altijd in de lijst staan; weghalen doe je bewust met 'wis'.
+        menu = tkinter.Menu(self, tearoff=0)
+        menu.add_command(label="Openen in browser", command=lambda: self._open(url))
+        menu.add_command(label="Openen in privévenster",
+                         command=lambda: self._open_incognito(url))
+        menu.add_command(label="URL kopiëren", command=lambda: self._kopieer(url))
+        try:
+            menu.tk_popup(self.winfo_pointerx(), self.winfo_pointery())
+        finally:
+            menu.grab_release()
+
     def _open(self, url):
-        # Aanklikken = bladeren: alleen de browser openen. De url blijft staan;
-        # weghalen doe je bewust met 'wis' of 'wis hele pagina'.
+        # Alleen de browser openen; de url blijft in de lijst staan.
         webbrowser.open(url)
         self._status("Geopend in de browser (url blijft in de lijst staan).")
+
+    def _open_incognito(self, url):
+        # Probeer een privé/incognito-venster (Chrome incognito, dan Edge InPrivate).
+        for exe, vlag in _incognito_kandidaten():
+            try:
+                subprocess.Popen([exe, vlag, url])
+                self._status("Geopend in een privévenster.")
+                return
+            except Exception:
+                continue
+        webbrowser.open(url)
+        self._status("Geen privé-browser gevonden — normaal geopend.")
 
     def _kopieer(self, url):
         self.clipboard_clear()
@@ -441,7 +484,7 @@ class App(ctk.CTk):
         merk = {"video": "🎬", "pagina": "📄", "suburl": "🎬"}.get(r["type"], "•")
         ctk.CTkButton(kop, text=f"{merk}  {(r['titel'] or r['url'])[:95]}", anchor="w",
                       fg_color="transparent", text_color=KLEUR_LINK, hover=False,
-                      command=lambda u=r["url"]: self._open(u)
+                      command=lambda u=r["url"]: self._url_menu(u)
                       ).pack(side="left", fill="x", expand=True, padx=4)
         # 'kopieer' direct rechts van de titel.
         ctk.CTkButton(kop, text="kopieer", width=64,
@@ -449,17 +492,20 @@ class App(ctk.CTk):
         if r.get("score"):
             ctk.CTkLabel(kop, text=f"{r['score']:.0f}", width=26).pack(side="left", padx=(4, 0))
 
-        ctk.CTkLabel(parent, text=r["url"], text_color="gray", anchor="w",
-                     font=ctk.CTkFont(size=10)).pack(fill="x", padx=14)
-
         body = ctk.CTkFrame(parent, fg_color="transparent")
         body.pack(fill="x", padx=14, pady=(2, 8))
         body.grid_columnconfigure(0, weight=1, uniform="kol")
         body.grid_columnconfigure(1, weight=1, uniform="kol")
+        # Linkerkolom: bovenaan de url, daaronder de samenvatting.
+        ctk.CTkLabel(body, text=r["url"], text_color="gray", anchor="nw", justify="left",
+                     wraplength=440, font=ctk.CTkFont(size=10)
+                     ).grid(row=0, column=0, sticky="nwe", padx=(0, 8))
         ctk.CTkLabel(body, text=r["samenvatting"] or "—", wraplength=440, justify="left",
-                     anchor="nw").grid(row=0, column=0, sticky="nwe", padx=(0, 8))
+                     anchor="nw").grid(row=1, column=0, sticky="nwe", padx=(0, 8))
+        # Rechterkolom: het AI-oordeel begint bovenaan, op dezelfde hoogte als de url.
         ctk.CTkLabel(body, text=r["oordeel"] or "—", wraplength=440, justify="left",
-                     anchor="nw", text_color="#cfcfcf").grid(row=0, column=1, sticky="nwe")
+                     anchor="nw", text_color="#cfcfcf"
+                     ).grid(row=0, column=1, rowspan=2, sticky="nwe")
 
     def _subrij(self, parent, s):
         # Eén strakke regel per video: aanvinkvakje + 'wis' links, dan de klikbare
@@ -478,7 +524,7 @@ class App(ctk.CTk):
         ctk.CTkButton(rij, text=f"🎬  {(s['titel'] or s['url'])[:110]}", anchor="w",
                       height=24, font=klein, fg_color="transparent",
                       text_color=KLEUR_LINK, hover=False,
-                      command=lambda u=s["url"]: self._open(u)
+                      command=lambda u=s["url"]: self._url_menu(u)
                       ).pack(side="left", fill="x", expand=True, padx=4)
         ctk.CTkButton(rij, text="kopieer", width=58, height=24, font=klein,
                       command=lambda u=s["url"]: self._kopieer(u)).pack(side="left", padx=2)

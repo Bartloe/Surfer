@@ -2,6 +2,18 @@
 
 Alle noemenswaardige wijzigingen aan dit project staan hier (Nederlands).
 
+## 2026-06-30 (laat) — keuzemenu op url + compacter oordeel (`app/` gui.py v1.4)
+
+### Gewijzigd — klikken op een titel geeft nu een keuzemenu
+- Een titel openen ging direct naar de browser. Nu verschijnt een klein keuzemenu met
+  **Openen in browser**, **Openen in privévenster** (Chrome incognito of Edge InPrivate)
+  en **URL kopiëren**. Geldt voor zowel de pagina-titels als de losse video-regels.
+
+### Gewijzigd — AI-oordeel begint hoger
+- Het DeepSeek-oordeel (rechterkolom) begon onder de url-regel en kostte daardoor extra
+  hoogte per serie. De url staat nu bovenin de linkerkolom en het oordeel begint op
+  **dezelfde hoogte** — zo neemt elke vondst minder regels in beslag.
+
 ## 2026-06-30 (avond) — indeling + titels uit tabellen
 
 ### Gewijzigd — schermindeling op verzoek (`app/` gui.py v1.3)
