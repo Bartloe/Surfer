@@ -2,6 +2,18 @@
 
 Alle noemenswaardige wijzigingen aan dit project staan hier (Nederlands).
 
+## 2026-06-30 (nacht) — oordeel naast titel + meegroeiende breedte (`app/` gui.py v1.6)
+
+### Gewijzigd — AI-oordeel begint nu echt op titelhoogte
+- Het oordeel stond rechts, maar begon op de url-regel — een regel onder de titel. Het
+  staat nu rechts náást het hele linkerblok (titel + url + samenvatting) en begint
+  bovenaan, op dezelfde hoogte als de titel.
+
+### Gewijzigd — tekst benut de volle breedte bij een groot venster
+- De url-beschrijving en het oordeel hadden een vaste regelbreedte (440px); bij een
+  volledig scherm bleef rechts veel ruimte leeg. De regelbreedte groeit nu mee met het
+  venster, zodat beide panelen volledig benut worden.
+
 ## 2026-06-30 (laat) — keuzemenu op url + compacter oordeel (`app/` gui.py v1.4)
 
 ### Gewijzigd — klikken op een titel geeft nu een keuzemenu

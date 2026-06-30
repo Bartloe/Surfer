@@ -1,12 +1,13 @@
 """
 gui — het scherm van de stand-alone Surfer-app (customtkinter).
 
-Versie: 1.5
-Reden:  Lettertype van het url-keuzemenu verdubbeld (beter leesbaar). Eerder (v1.4):
-        (1) klikken op een url toont een keuzemenu (Openen in browser / Openen in
-        privévenster / URL kopiëren); (2) het AI-oordeel begint op dezelfde hoogte
-        als de url in het linkerpaneel, zodat elke serie minder regels inneemt.
-Datum:  2026-06-30 22:52 (NL)
+Versie: 1.6
+Reden:  Twee correcties op de indeling: (1) het AI-oordeel staat nu rechts náást het
+        hele linkerblok en begint op dezelfde hoogte als de titel (stond nog een regel
+        te laag); (2) url-beschrijving en oordeel groeien mee met de vensterbreedte
+        (geen vaste 440px meer), zodat ze bij volledig scherm de hele paneelbreedte
+        benutten. Eerder: url-keuzemenu (browser/privévenster/kopiëren) + groter menu.
+Datum:  2026-06-30 23:05 (NL)
 
 - Bovenin: profiel kiezen/bewerken/nieuw, drempel + aantal, de zoekknop, en een
   weergavebalk met Sorteer + Per batch.
@@ -467,7 +468,19 @@ class App(ctk.CTk):
         return blok
 
     def _hoofdrij(self, parent, r, wis_blok):
-        kop = ctk.CTkFrame(parent, fg_color="transparent")
+        # Twee gelijke kolommen: links titel + url + samenvatting, rechts het oordeel.
+        # Zo begint het oordeel bovenaan, op dezelfde hoogte als de titel. Het grid
+        # zit in een eigen gepackt frame (de subrijen onder een pagina gebruiken pack,
+        # en pack/grid mogen niet in dezelfde container gemengd worden).
+        rij = ctk.CTkFrame(parent, fg_color="transparent")
+        rij.pack(fill="x")
+        rij.grid_columnconfigure(0, weight=1, uniform="hr")
+        rij.grid_columnconfigure(1, weight=1, uniform="hr")
+
+        links = ctk.CTkFrame(rij, fg_color="transparent")
+        links.grid(row=0, column=0, sticky="nwe", padx=(0, 6))
+
+        kop = ctk.CTkFrame(links, fg_color="transparent")
         kop.pack(fill="x", padx=6, pady=(6, 0))
 
         var = ctk.BooleanVar(value=(r["status"] == "bewaard"))
@@ -492,20 +505,27 @@ class App(ctk.CTk):
         if r.get("score"):
             ctk.CTkLabel(kop, text=f"{r['score']:.0f}", width=26).pack(side="left", padx=(4, 0))
 
-        body = ctk.CTkFrame(parent, fg_color="transparent")
-        body.pack(fill="x", padx=14, pady=(2, 8))
-        body.grid_columnconfigure(0, weight=1, uniform="kol")
-        body.grid_columnconfigure(1, weight=1, uniform="kol")
-        # Linkerkolom: bovenaan de url, daaronder de samenvatting.
-        ctk.CTkLabel(body, text=r["url"], text_color="gray", anchor="nw", justify="left",
-                     wraplength=440, font=ctk.CTkFont(size=10)
-                     ).grid(row=0, column=0, sticky="nwe", padx=(0, 8))
-        ctk.CTkLabel(body, text=r["samenvatting"] or "—", wraplength=440, justify="left",
-                     anchor="nw").grid(row=1, column=0, sticky="nwe", padx=(0, 8))
-        # Rechterkolom: het AI-oordeel begint bovenaan, op dezelfde hoogte als de url.
-        ctk.CTkLabel(body, text=r["oordeel"] or "—", wraplength=440, justify="left",
-                     anchor="nw", text_color="#cfcfcf"
-                     ).grid(row=0, column=1, rowspan=2, sticky="nwe")
+        url_lbl = ctk.CTkLabel(links, text=r["url"], text_color="gray", anchor="nw",
+                               justify="left", font=ctk.CTkFont(size=10))
+        url_lbl.pack(fill="x", padx=14, pady=(2, 0))
+        sam_lbl = ctk.CTkLabel(links, text=r["samenvatting"] or "—", justify="left",
+                               anchor="nw")
+        sam_lbl.pack(fill="x", padx=14, pady=(2, 8))
+
+        oordeel_lbl = ctk.CTkLabel(rij, text=r["oordeel"] or "—", justify="left",
+                                   anchor="nw", text_color="#cfcfcf")
+        oordeel_lbl.grid(row=0, column=1, sticky="nwe", padx=(6, 6), pady=(6, 8))
+
+        # De tekst groeit mee met het venster (geen vaste 440px meer).
+        for lbl in (url_lbl, sam_lbl, oordeel_lbl):
+            self._volg_breedte(lbl)
+
+    @staticmethod
+    def _volg_breedte(label):
+        """Laat de wraplength van een label meebewegen met zijn toegewezen breedte,
+        zodat lange tekst de volle paneelbreedte benut i.p.v. een vaste 440px."""
+        label.bind("<Configure>",
+                   lambda e, lb=label: lb.configure(wraplength=max(120, e.width - 16)))
 
     def _subrij(self, parent, s):
         # Eén strakke regel per video: aanvinkvakje + 'wis' links, dan de klikbare
