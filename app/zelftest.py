@@ -1,23 +1,51 @@
 """
 zelftest — offline controle van de keten zonder web of DeepSeek (geen kosten).
 
-Versie: 1.0
-Reden:  Eerste versie — bewijst graafwerk-koppeling, oordeel-flow, statussen, export.
-Datum:  2026-06-30 19:18 (NL)
+Versie: 1.1
+Reden:  KRITIEK — de test draaide op het ECHTE profiel en wiste aan het eind de
+        echte resultaten/<profiel>.json (oorzaak van 'vondsten verdwenen'). De test
+        draait nu volledig in een tijdelijke wegwerpmap met een testprofiel en raakt
+        nooit meer echte profielen of resultaten aan.
+Datum:  2026-06-30 21:50 (NL)
 
 Draaien:  .venv/Scripts/python.exe zelftest.py
 Faalt luid (assert) zodra er iets stuk is; print 'ALLES GROEN' als alles klopt.
 """
 
+import shutil
 import sys
+import tempfile
+from contextlib import contextmanager
+from pathlib import Path
 
 import graafwerk
 import kern
 import opslag as opslag_mod
 
 
+@contextmanager
+def tijdelijke_opslag():
+    """Verleg profielen/resultaten naar een wegwerpmap, zodat de zelftest NOOIT
+    echte vondsten aanraakt of wist. Zet alles na afloop weer terug."""
+    map = Path(tempfile.mkdtemp(prefix="surfer_zelftest_"))
+    orig_prof, orig_res = opslag_mod.PROFIELEN_MAP, opslag_mod.RESULTATEN_MAP
+    opslag_mod.PROFIELEN_MAP = map / "profielen"
+    opslag_mod.RESULTATEN_MAP = map / "resultaten"
+    opslag_mod.PROFIELEN_MAP.mkdir(parents=True)
+    opslag_mod.RESULTATEN_MAP.mkdir(parents=True)
+    try:
+        yield
+    finally:
+        opslag_mod.PROFIELEN_MAP, opslag_mod.RESULTATEN_MAP = orig_prof, orig_res
+        shutil.rmtree(map, ignore_errors=True)
+
+
 def test_profiel_lezen():
-    zoektermen, context = opslag_mod.lees_profiel("wk_voetbal")
+    with tijdelijke_opslag():
+        opslag_mod.profiel_pad("testprofiel").write_text(
+            "Zoektermen:\nwedstrijd\ngoal\n\nContext:\nvideo's over voetbal\n",
+            encoding="utf-8")
+        zoektermen, context = opslag_mod.lees_profiel("testprofiel")
     assert len(zoektermen) >= 2, "zoektermen niet gelezen"
     assert "video" in context.lower(), "context niet gelezen"
     print(f"  profiel: {len(zoektermen)} zoektermen, context {len(context)} tekens — ok")
@@ -65,62 +93,67 @@ class NepOordeel:
 
 
 def test_run_en_statussen():
-    # graafwerk tijdelijk vervangen door de nep-versie
-    nep = NepGraafwerk()
-    origineel = (graafwerk.zoek_videos, graafwerk.zoek_paginas,
-                 graafwerk.haal_pagina, graafwerk.videos_op_pagina)
-    kern.graafwerk.zoek_videos = nep.zoek_videos
-    kern.graafwerk.zoek_paginas = nep.zoek_paginas
-    kern.graafwerk.haal_pagina = nep.haal_pagina
-    kern.graafwerk.videos_op_pagina = nep.videos_op_pagina
-    try:
-        res = kern.run("wk_voetbal", drempel=6.0, oordelaar=NepOordeel(), log=lambda *a: None)
-    finally:
-        (kern.graafwerk.zoek_videos, kern.graafwerk.zoek_paginas,
-         kern.graafwerk.haal_pagina, kern.graafwerk.videos_op_pagina) = origineel
-    assert res["nieuw"] > 0, "run leverde niets op"
-
-    winkel = opslag_mod.ProfielOpslag("wk_voetbal")
-    actief = winkel.actieve()
-    assert actief, "geen actieve resultaten bewaard"
-    types = {r["type"] for r in actief}
-    assert "pagina" in types and "suburl" in types, "pagina/suburl ontbreekt"
-
-    # statussen: bewaren -> in export; bezoeken -> eruit
-    pagina = next(r for r in actief if r["type"] == "pagina")
-    winkel.zet_status(pagina["url"], "bewaard")
-    winkel.bewaar()
     import json
-    export = json.loads(winkel.export_pad.read_text(encoding="utf-8"))
-    assert export["aantal"] == 1, "bewaarde url niet in export"
-    winkel.zet_status(pagina["url"], "bezocht")
-    winkel.bewaar()
-    export = json.loads(winkel.export_pad.read_text(encoding="utf-8"))
-    assert export["aantal"] == 0, "bezochte url valt niet uit export"
+    with tijdelijke_opslag():
+        opslag_mod.profiel_pad("testprofiel").write_text(
+            "Zoektermen:\nwedstrijd\ngoal\n\nContext:\nvideo's over voetbal\n",
+            encoding="utf-8")
 
-    # bulk-wissen van een blok (pagina + suburls)
-    winkel.wis_blok(pagina["url"])
-    assert all(r["status"] == "geskipt"
-               for r in winkel.resultaten.values()
-               if r["url"] == pagina["url"] or r.get("parent_url") == pagina["url"]), \
-        "wis_blok werkt niet"
+        # graafwerk tijdelijk vervangen door de nep-versie
+        nep = NepGraafwerk()
+        origineel = (graafwerk.zoek_videos, graafwerk.zoek_paginas,
+                     graafwerk.haal_pagina, graafwerk.videos_op_pagina)
+        kern.graafwerk.zoek_videos = nep.zoek_videos
+        kern.graafwerk.zoek_paginas = nep.zoek_paginas
+        kern.graafwerk.haal_pagina = nep.haal_pagina
+        kern.graafwerk.videos_op_pagina = nep.videos_op_pagina
+        try:
+            res = kern.run("testprofiel", drempel=6.0, oordelaar=NepOordeel(), log=lambda *a: None)
+        finally:
+            (kern.graafwerk.zoek_videos, kern.graafwerk.zoek_paginas,
+             kern.graafwerk.haal_pagina, kern.graafwerk.videos_op_pagina) = origineel
+        assert res["nieuw"] > 0, "run leverde niets op"
 
-    # geheugen: tweede run mag niets nieuws meer toevoegen (alles al gezien)
-    kern.graafwerk.zoek_videos = nep.zoek_videos
-    kern.graafwerk.zoek_paginas = nep.zoek_paginas
-    kern.graafwerk.haal_pagina = nep.haal_pagina
-    kern.graafwerk.videos_op_pagina = nep.videos_op_pagina
-    try:
-        res2 = kern.run("wk_voetbal", drempel=6.0, oordelaar=NepOordeel(), log=lambda *a: None)
-    finally:
-        (kern.graafwerk.zoek_videos, kern.graafwerk.zoek_paginas,
-         kern.graafwerk.haal_pagina, kern.graafwerk.videos_op_pagina) = origineel
-    assert res2["nieuw"] == 0, "geheugen werkt niet — zelfde urls opnieuw toegevoegd"
-    print("  run + statussen + export + geheugen + bulk-wis — ok")
+        winkel = opslag_mod.ProfielOpslag("testprofiel")
+        actief = winkel.actieve()
+        assert actief, "geen actieve resultaten bewaard"
+        types = {r["type"] for r in actief}
+        assert "pagina" in types and "suburl" in types, "pagina/suburl ontbreekt"
 
-    # opruimen: testbestanden weg
-    winkel.pad.unlink(missing_ok=True)
-    winkel.export_pad.unlink(missing_ok=True)
+        # statussen: bewaren -> in export; bezoeken -> eruit
+        pagina = next(r for r in actief if r["type"] == "pagina")
+        winkel.zet_status(pagina["url"], "bewaard")
+        winkel.bewaar()
+        export = json.loads(winkel.export_pad.read_text(encoding="utf-8"))
+        assert export["aantal"] == 1, "bewaarde url niet in export"
+        winkel.zet_status(pagina["url"], "bezocht")
+        winkel.bewaar()
+        export = json.loads(winkel.export_pad.read_text(encoding="utf-8"))
+        assert export["aantal"] == 0, "bezochte url valt niet uit export"
+
+        # veilig schrijven: na een tweede bewaar bestaat er een .bak-reservekopie
+        assert winkel.pad.with_suffix(winkel.pad.suffix + ".bak").exists(), \
+            "geen .bak-reservekopie gemaakt"
+
+        # bulk-wissen van een blok (pagina + suburls)
+        winkel.wis_blok(pagina["url"])
+        assert all(r["status"] == "geskipt"
+                   for r in winkel.resultaten.values()
+                   if r["url"] == pagina["url"] or r.get("parent_url") == pagina["url"]), \
+            "wis_blok werkt niet"
+
+        # geheugen: tweede run mag niets nieuws meer toevoegen (alles al gezien)
+        kern.graafwerk.zoek_videos = nep.zoek_videos
+        kern.graafwerk.zoek_paginas = nep.zoek_paginas
+        kern.graafwerk.haal_pagina = nep.haal_pagina
+        kern.graafwerk.videos_op_pagina = nep.videos_op_pagina
+        try:
+            res2 = kern.run("testprofiel", drempel=6.0, oordelaar=NepOordeel(), log=lambda *a: None)
+        finally:
+            (kern.graafwerk.zoek_videos, kern.graafwerk.zoek_paginas,
+             kern.graafwerk.haal_pagina, kern.graafwerk.videos_op_pagina) = origineel
+        assert res2["nieuw"] == 0, "geheugen werkt niet — zelfde urls opnieuw toegevoegd"
+    print("  run + statussen + export + geheugen + bulk-wis + .bak — ok")
 
 
 if __name__ == "__main__":

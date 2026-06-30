@@ -1,9 +1,12 @@
 """
 opslag — datalaag: profielen lezen + per-profiel resultaten/statussen/geheugen.
 
-Versie: 1.0
-Reden:  Eerste versie — eenvoudige json-opslag i.p.v. een database (POC-wens).
-Datum:  2026-06-30 19:18 (NL)
+Versie: 1.1
+Reden:  Vondsten beschermen tegen dataverlies: veilig wegschrijven (eerst naar een
+        tijdelijk bestand, dan omwisselen) + een .bak-reservekopie van de vorige
+        goede versie. Zo kan een onderbroken of foute schrijfactie de oogst niet
+        meer vernietigen.
+Datum:  2026-06-30 21:45 (NL)
 
 - Profiel = los .txt-bestand in profielen/ met de kopjes 'Zoektermen:' en 'Context:'.
 - Per profiel één werkbestand resultaten/<profiel>.json met:
@@ -136,7 +139,7 @@ class ProfielOpslag:
             "gezien_urls": sorted(self.gezien),
             "resultaten": list(self.resultaten.values()),
         }
-        self.pad.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        _schrijf_veilig(self.pad, json.dumps(data, ensure_ascii=False, indent=2))
         self._schrijf_export()
 
     def _schrijf_export(self):
@@ -149,5 +152,20 @@ class ProfielOpslag:
         export = {"profiel": self.naam,
                   "bijgewerkt": datetime.now().isoformat(timespec="seconds"),
                   "aantal": len(oogst), "urls": oogst}
-        self.export_pad.write_text(json.dumps(export, ensure_ascii=False, indent=2),
-                                   encoding="utf-8")
+        _schrijf_veilig(self.export_pad, json.dumps(export, ensure_ascii=False, indent=2))
+
+
+# ----------------------------------------------------------------------------- veilig schrijven
+def _schrijf_veilig(pad: Path, tekst: str):
+    """Schrijf zonder risico op dataverlies: eerst naar een tijdelijk bestand, dan
+    de vorige goede versie als .bak opzijzetten en het tijdelijke bestand op zijn
+    plaats schuiven. Een crash midden in het schrijven laat zo nooit een half of
+    leeg hoofdbestand achter; de vorige versie blijft als .bak bewaard."""
+    tijdelijk = pad.with_suffix(pad.suffix + ".tmp")
+    tijdelijk.write_text(tekst, encoding="utf-8")
+    if pad.exists():
+        try:
+            pad.replace(pad.with_suffix(pad.suffix + ".bak"))
+        except OSError:
+            pass                                  # back-up mislukt: schrijven gaat door
+    tijdelijk.replace(pad)
