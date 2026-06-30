@@ -4,6 +4,16 @@ Alle noemenswaardige wijzigingen aan dit project staan hier (Nederlands).
 
 ## 2026-06-30
 
+### Toegevoegd — overzicht bij veel vondsten + dubbelklik-start (`app/` gui.py v1.2)
+- **Sorteerknop:** vondsten sorteren op *Hoogste score* of *Laatste run*.
+- **Batch-weergave:** niet meer alles tegelijk, maar N per keer (instelbaar, standaard 25)
+  met *◀ Vorige* / *Volgende ▶* en een teller "Toont X–Y van Z". Knop
+  **"Wis getoonde (niet-bewaard)"** gooit de zichtbare, niet-aangevinkte vondsten weg en
+  schuift de volgende batch in beeld — zo werk je in hapklare brokken door een grote oogst.
+- **Bewaarde vondsten** staan nu apart bovenaan ("✅ Bewaard (N)") en blijven altijd in
+  beeld; ze tellen niet mee in de te-beoordelen batches.
+- **start.bat:** de app starten met een dubbelklik (geen terminal meer nodig).
+
 ### Gewijzigd — stand-alone app (`app/`), eerste gebruikersronde
 - **Live verloop:** nieuw venster onder de knoppen dat tijdens een run per stap
   toont wat er gebeurt (zoeken, ophalen, beoordelen, bewaard, valt af). Voorheen

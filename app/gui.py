@@ -1,11 +1,11 @@
 """
 gui — het scherm van de stand-alone Surfer-app (customtkinter).
 
-Versie: 1.1
-Reden:  Meekijken + minder verrassingen — live activiteitenvenster tijdens een run,
-        kopieer-knop per url, aanklikken opent alleen de browser (wist niets meer),
-        een duidelijkere 'wis hele pagina'-knop, en compacte video-regels (1 regel).
-Datum:  2026-06-30 19:59 (NL)
+Versie: 1.2
+Reden:  Overzicht bij veel vondsten — sorteren (hoogste score / laatste run),
+        batch-weergave (N per keer) met 'wis getoonde → volgende', en bewaarde
+        vondsten apart bovenaan. (1.1 = live verloop, kopieer, klik-opent-alleen.)
+Datum:  2026-06-30 20:59 (NL)
 
 - Bovenin: profiel kiezen/bewerken/nieuw, drempel + aantal, en de zoekknop.
 - Live venster onder de knoppen: toont tijdens een run welke stap loopt.
@@ -42,8 +42,15 @@ class App(ctk.CTk):
         self._stop = False
         self._bezig = False
 
+        self.sorteer = "score"            # "score" (hoogste eerst) of "run" (laatste run eerst)
+        self.batch_offset = 0             # bij welke eenheid het zichtbare blok begint
+        self._batch_historie: list[int] = []
+        self._volgende_offset = 0         # waar 'Volgende' heen springt (gezet in _teken)
+        self._huidige_batch_units: list[dict] = []
+
         self._bouw_bovenbalk()
         self._bouw_resultaten()
+        self._bouw_batchbalk()
         self._bouw_log()
         self._bouw_onderbalk()
         self._herlaad_profielen()
@@ -78,6 +85,32 @@ class App(ctk.CTk):
     def _bouw_resultaten(self):
         self.lijst = ctk.CTkScrollableFrame(self, label_text="Resultaten")
         self.lijst.pack(fill="both", expand=True, padx=10, pady=4)
+
+    def _bouw_batchbalk(self):
+        balk = ctk.CTkFrame(self)
+        balk.pack(fill="x", padx=10, pady=(0, 4))
+
+        ctk.CTkLabel(balk, text="Sorteer:").pack(side="left", padx=(8, 2))
+        self.sorteer_menu = ctk.CTkOptionMenu(
+            balk, values=["Hoogste score", "Laatste run"], width=150,
+            command=self._zet_sorteer)
+        self.sorteer_menu.set("Hoogste score")
+        self.sorteer_menu.pack(side="left")
+
+        ctk.CTkLabel(balk, text="Per batch:").pack(side="left", padx=(16, 2))
+        self.batch_var = ctk.StringVar(value="25")
+        ctk.CTkEntry(balk, textvariable=self.batch_var, width=44).pack(side="left")
+
+        self.knop_vorige = ctk.CTkButton(balk, text="◀ Vorige", width=80,
+                                         command=self._vorige_batch)
+        self.knop_vorige.pack(side="left", padx=(16, 4))
+        self.knop_volgende = ctk.CTkButton(balk, text="Volgende ▶", width=90,
+                                           command=self._volgende_batch)
+        self.knop_volgende.pack(side="left", padx=4)
+        ctk.CTkButton(balk, text="Wis getoonde (niet-bewaard)", fg_color=KLEUR_WIS,
+                      command=self._wis_batch).pack(side="left", padx=8)
+        self.batch_info = ctk.CTkLabel(balk, text="", anchor="e")
+        self.batch_info.pack(side="right", padx=10)
 
     def _bouw_log(self):
         kader = ctk.CTkFrame(self)
@@ -247,34 +280,129 @@ class App(ctk.CTk):
     def _teken(self):
         for w in self.lijst.winfo_children():
             w.destroy()
+        self._huidige_batch_units = []
         if not self.winkel:
+            self._update_batchbalk(0, 0, 0)
             return
         actief = self.winkel.actieve()
-        paginas = [r for r in actief if r["type"] == "pagina"]
-        videos = [r for r in actief if r["type"] == "video"]
-        suburls = [r for r in actief if r["type"] == "suburl"]
-        per_ouder: dict[str, list] = {}
-        for s in suburls:
-            per_ouder.setdefault(s.get("parent_url"), []).append(s)
-
-        getoond = set()
-        for p in paginas:
-            blok = self._blok()
-            self._hoofdrij(blok, p, wis_blok=True)
-            for s in per_ouder.get(p["url"], []):
-                self._subrij(blok, s)
-                getoond.add(s["url"])
-        for v in videos:
-            self._hoofdrij(self._blok(), v, wis_blok=False)
-        wezen = [s for s in suburls if s["url"] not in getoond]  # ouder al weg
-        if wezen:
-            blok = self._blok()
-            for s in wezen:
-                self._subrij(blok, s)          # ook compact: één regel per video
-
         if not actief:
             ctk.CTkLabel(self.lijst, text="(nog geen resultaten — kies een profiel en zoek)"
                          ).pack(pady=20)
+            self._update_batchbalk(0, 0, 0)
+            return
+
+        # 1) Bewaarde vondsten staan apart bovenaan (jouw keepers, altijd in beeld).
+        bewaard = [r for r in actief if r["status"] == "bewaard"]
+        if bewaard:
+            blok = self._blok()
+            ctk.CTkLabel(blok, text=f"✅ Bewaard ({len(bewaard)})", anchor="w"
+                         ).pack(fill="x", padx=6, pady=(4, 2))
+            for r in bewaard:
+                self._subrij(blok, r)
+
+        # 2) Nieuwe vondsten: in eenheden (pagina + video's eronder horen bij elkaar),
+        #    gesorteerd, en in batches van N getoond.
+        units = self._sorteer_units(self._maak_units(
+            [r for r in actief if r["status"] == "nieuw"]))
+        if not units:
+            self._update_batchbalk(0, 0, 0)
+            return
+
+        grootte = self._batch_grootte()
+        start = min(self.batch_offset, len(units) - 1)
+        rijen, i = 0, start
+        while i < len(units) and (rijen < grootte or not self._huidige_batch_units):
+            self._render_unit(units[i])
+            self._huidige_batch_units.append(units[i])
+            rijen += units[i]["rijen"]
+            i += 1
+        self._volgende_offset = i
+        self._update_batchbalk(start, i, len(units))
+
+    # -- batch-helpers --------------------------------------------------------
+    def _batch_grootte(self) -> int:
+        try:
+            return max(1, int(self.batch_var.get()))
+        except (ValueError, AttributeError):
+            return 25
+
+    def _maak_units(self, nieuw: list[dict]) -> list[dict]:
+        """Groepeer nieuwe vondsten: pagina + haar video's = één eenheid; losse
+        video's en weesvideo's elk een eigen eenheid. 'rijen' telt de schermregels."""
+        suburls = [r for r in nieuw if r["type"] == "suburl"]
+        per_ouder: dict[str, list] = {}
+        for s in suburls:
+            per_ouder.setdefault(s.get("parent_url"), []).append(s)
+        units: list[dict] = []
+        gebruikt: set[str] = set()
+        for p in [r for r in nieuw if r["type"] == "pagina"]:
+            kids = per_ouder.get(p["url"], [])
+            gebruikt.update(s["url"] for s in kids)
+            units.append({"soort": "pagina", "hoofd": p, "subs": kids,
+                          "rijen": 1 + len(kids), "score": p.get("score") or 0,
+                          "run": p.get("run", "")})
+        for v in [r for r in nieuw if r["type"] == "video"]:
+            units.append({"soort": "video", "hoofd": v, "subs": [], "rijen": 1,
+                          "score": v.get("score") or 0, "run": v.get("run", "")})
+        for s in suburls:
+            if s["url"] not in gebruikt:                      # ouder al weg
+                units.append({"soort": "wees", "hoofd": s, "subs": [], "rijen": 1,
+                              "score": s.get("score") or 0, "run": s.get("run", "")})
+        return units
+
+    def _sorteer_units(self, units: list[dict]) -> list[dict]:
+        if self.sorteer == "run":
+            return sorted(units, key=lambda u: (u["run"], u["score"]), reverse=True)
+        return sorted(units, key=lambda u: u["score"], reverse=True)
+
+    def _render_unit(self, u: dict):
+        if u["soort"] == "pagina":
+            blok = self._blok()
+            self._hoofdrij(blok, u["hoofd"], wis_blok=True)
+            for s in u["subs"]:
+                self._subrij(blok, s)
+        elif u["soort"] == "video":
+            self._hoofdrij(self._blok(), u["hoofd"], wis_blok=False)
+        else:
+            self._subrij(self._blok(), u["hoofd"])
+
+    def _update_batchbalk(self, start: int, eind: int, totaal: int):
+        getoond = max(0, eind - start)
+        self.batch_info.configure(
+            text=f"Toont {start + 1}–{eind} van {totaal}" if totaal else "Niets te tonen")
+        self.knop_volgende.configure(state="normal" if eind < totaal else "disabled")
+        self.knop_vorige.configure(
+            state="normal" if (self._batch_historie or start > 0) else "disabled")
+
+    def _zet_sorteer(self, keuze: str):
+        self.sorteer = "run" if "run" in keuze.lower() else "score"
+        self.batch_offset = 0
+        self._batch_historie.clear()
+        self._teken()
+
+    def _volgende_batch(self):
+        if self._volgende_offset > self.batch_offset:
+            self._batch_historie.append(self.batch_offset)
+            self.batch_offset = self._volgende_offset
+            self._teken()
+
+    def _vorige_batch(self):
+        self.batch_offset = self._batch_historie.pop() if self._batch_historie else 0
+        self._teken()
+
+    def _wis_batch(self):
+        """De nu getoonde, nog niet-bewaarde vondsten weggooien en de volgende tonen."""
+        if not self.winkel:
+            return
+        weg = 0
+        for u in self._huidige_batch_units:
+            for r in [u["hoofd"], *u["subs"]]:
+                if r["status"] == "nieuw":
+                    self.winkel.zet_status(r["url"], "geskipt")
+                    weg += 1
+        self.winkel.bewaar()
+        self._status(f"{weg} getoonde vondst(en) weggegooid (bewaarde bleven staan).")
+        self._teken()
 
     def _blok(self):
         blok = ctk.CTkFrame(self.lijst, border_width=1)
