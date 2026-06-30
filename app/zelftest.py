@@ -1,12 +1,11 @@
 """
 zelftest — offline controle van de keten zonder web of DeepSeek (geen kosten).
 
-Versie: 1.1
-Reden:  KRITIEK — de test draaide op het ECHTE profiel en wiste aan het eind de
-        echte resultaten/<profiel>.json (oorzaak van 'vondsten verdwenen'). De test
-        draait nu volledig in een tijdelijke wegwerpmap met een testprofiel en raakt
-        nooit meer echte profielen of resultaten aan.
-Datum:  2026-06-30 21:50 (NL)
+Versie: 1.2
+Reden:  Test voor de nieuwe zoekterm-analyse toegevoegd (telling per zoekterm,
+        trefkans, gemiddeld cijfer, sortering, en '(onbekend)' voor herkomstloze
+        vondsten). Eerder (v1.1): test draait in een wegwerpmap, raakt nooit echte data.
+Datum:  2026-06-30 23:30 (NL)
 
 Draaien:  .venv/Scripts/python.exe zelftest.py
 Faalt luid (assert) zodra er iets stuk is; print 'ALLES GROEN' als alles klopt.
@@ -18,6 +17,7 @@ import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 
+import analyse
 import graafwerk
 import kern
 import opslag as opslag_mod
@@ -156,10 +156,36 @@ def test_run_en_statussen():
     print("  run + statussen + export + geheugen + bulk-wis + .bak — ok")
 
 
+def test_zoekterm_analyse():
+    # Drie zoektermen met uiteenlopende oogst; een record zonder bron_term -> '(onbekend)'.
+    resultaten = [
+        {"bron_term": "goal", "status": "bewaard", "oordeel": "top", "score": 9.0},
+        {"bron_term": "goal", "status": "bewaard", "oordeel": "top", "score": 7.0},
+        {"bron_term": "goal", "status": "geskipt", "oordeel": "matig", "score": 5.0},
+        {"bron_term": "ruis", "status": "geskipt", "oordeel": "nee", "score": 4.0},
+        {"bron_term": "ruis", "status": "bewaard", "oordeel": "ok", "score": 6.0},
+        {"bron_term": "open", "status": "nieuw", "oordeel": "", "score": 8.0},
+        {"status": "bewaard", "oordeel": "los", "score": 8.0},   # geen bron_term
+    ]
+    rijen = analyse.analyseer(resultaten)
+    per_term = {r["zoekterm"]: r for r in rijen}
+
+    assert per_term["goal"]["bewaard"] == 2 and per_term["goal"]["weggegooid"] == 1
+    assert abs(per_term["goal"]["trefkans"] - 2 / 3) < 1e-9, "trefkans goal klopt niet"
+    assert abs(per_term["goal"]["gem_cijfer"] - 7.0) < 1e-9, "gem. cijfer goal klopt niet"
+    assert per_term["open"]["nieuw"] == 1 and per_term["open"]["trefkans"] is None
+    assert analyse.ONBEKEND in per_term, "record zonder bron_term niet onder (onbekend)"
+    # sortering: meeste bewaard eerst -> 'goal' (2) staat vóór 'ruis' (1)
+    volgorde = [r["zoekterm"] for r in rijen]
+    assert volgorde.index("goal") < volgorde.index("ruis"), "sortering op bewaard klopt niet"
+    print(f"  zoekterm-analyse: {len(rijen)} termen, sortering + trefkans + cijfer — ok")
+
+
 if __name__ == "__main__":
     print("Zelftest stand-alone Surfer:")
     test_profiel_lezen()
     test_videos_op_pagina()
     test_run_en_statussen()
+    test_zoekterm_analyse()
     print("ALLES GROEN")
     sys.exit(0)

@@ -1,13 +1,12 @@
 """
 gui — het scherm van de stand-alone Surfer-app (customtkinter).
 
-Versie: 1.6
-Reden:  Twee correcties op de indeling: (1) het AI-oordeel staat nu rechts náást het
-        hele linkerblok en begint op dezelfde hoogte als de titel (stond nog een regel
-        te laag); (2) url-beschrijving en oordeel groeien mee met de vensterbreedte
-        (geen vaste 440px meer), zodat ze bij volledig scherm de hele paneelbreedte
-        benutten. Eerder: url-keuzemenu (browser/privévenster/kopiëren) + groter menu.
-Datum:  2026-06-30 23:05 (NL)
+Versie: 1.7
+Reden:  Knop 'Analyse zoektermen' toegevoegd (weergavebalk, rechts): opent een venster
+        met de tabel welke zoektermen de meeste bewaarde vondsten opleveren (en welke
+        vooral ruis geven). Eerder (v1.6): AI-oordeel op titelhoogte + tekst groeit mee
+        met de vensterbreedte; url-keuzemenu (browser/privévenster/kopiëren).
+Datum:  2026-06-30 23:30 (NL)
 
 - Bovenin: profiel kiezen/bewerken/nieuw, drempel + aantal, de zoekknop, en een
   weergavebalk met Sorteer + Per batch.
@@ -32,6 +31,7 @@ import customtkinter as ctk
 
 import kern
 import opslag as opslag_mod
+import rapport_zoektermen
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -121,6 +121,10 @@ class App(ctk.CTk):
         ctk.CTkLabel(balk, text="Per batch:").pack(side="left", padx=(16, 2))
         self.batch_var = ctk.StringVar(value="25")
         ctk.CTkEntry(balk, textvariable=self.batch_var, width=44).pack(side="left")
+
+        # Rechts: analyse van welke zoektermen de beste oogst geven.
+        ctk.CTkButton(balk, text="Analyse zoektermen", width=150,
+                      command=self._analyse_zoektermen).pack(side="right", padx=8)
 
     def _bouw_log(self):
         # Niet meteen gepackt: verschijnt pas tijdens een run (zie _toon_log).
@@ -311,6 +315,24 @@ class App(ctk.CTk):
         self.clipboard_clear()
         self.clipboard_append(url)
         self._status("URL naar het klembord gekopieerd.")
+
+    def _analyse_zoektermen(self):
+        naam = self.profiel_var.get()
+        if not naam:
+            self._status("Kies eerst een profiel.")
+            return
+        try:
+            tekst = rapport_zoektermen.schrijf_rapport(naam)
+        except Exception as e:
+            tekst = f"Kon de analyse niet maken: {e}"
+        top = ctk.CTkToplevel(self)
+        top.title(f"Zoekterm-analyse: {naam}")
+        top.geometry("760x520")
+        box = ctk.CTkTextbox(top, wrap="none", font=ctk.CTkFont(family="Consolas", size=13))
+        box.pack(fill="both", expand=True, padx=10, pady=10)
+        box.insert("1.0", tekst)
+        box.configure(state="disabled")
+        top.after(120, top.lift)
 
     def _wis_een(self, url):
         if self.winkel:

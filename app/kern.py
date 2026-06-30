@@ -1,10 +1,11 @@
 """
 kern — orkestratie van één zoekronde voor een profiel.
 
-Versie: 1.1
-Reden:  Live meekijken — per stap een duidelijke logregel (zoeken/ophalen/beoordelen/
-        bewaard/te laag), zodat het scherm toont welke actie loopt.
-Datum:  2026-06-30 19:59 (NL)
+Versie: 1.2
+Reden:  Elke vondst krijgt nu de zoekterm mee waaruit hij kwam (bron_term); video's
+        van een pagina erven de zoekterm van die pagina. Voedt de zoekterm-analyse.
+        Eerder (v1.1): live meekijken met een logregel per stap.
+Datum:  2026-06-30 23:25 (NL)
 
 Per run, per zoekterm:
   1. directe video's zoeken  -> elk apart door DeepSeek laten beoordelen;
@@ -68,7 +69,8 @@ def run(profiel: str, *, drempel: float = 6.0, max_per_term: int = 12,
                 res = oordelaar.beoordeel(t.titel, t.fragment, context)
                 if res["past"] and res["score"] >= drempel:
                     winkel.voeg_resultaat(t.url, t.titel, "video", run_id,
-                                          res["samenvatting"], res["oordeel"], res["score"])
+                                          res["samenvatting"], res["oordeel"], res["score"],
+                                          bron_term=term)
                     nieuw += 1
                     log(f"[surf]   ✓ bewaard (score {res['score']:.0f})")
                 else:
@@ -93,7 +95,8 @@ def run(profiel: str, *, drempel: float = 6.0, max_per_term: int = 12,
                     log(f"[surf]   ✗ valt af (score {res['score']:.0f}, drempel {drempel:.0f})")
                     continue
                 winkel.voeg_resultaat(p.url, pagina["titel"] or p.titel, "pagina", run_id,
-                                      res["samenvatting"], res["oordeel"], res["score"])
+                                      res["samenvatting"], res["oordeel"], res["score"],
+                                      bron_term=term)
                 nieuw += 1
                 eraf = 0
                 for v in graafwerk.videos_op_pagina(pagina["html"], p.url):
@@ -102,7 +105,7 @@ def run(profiel: str, *, drempel: float = 6.0, max_per_term: int = 12,
                     winkel.markeer_gezien(v.url)
                     winkel.voeg_resultaat(v.url, v.titel, "suburl", run_id,
                                           "(video gevonden op de bovenstaande pagina)",
-                                          "", res["score"], parent_url=p.url)
+                                          "", res["score"], parent_url=p.url, bron_term=term)
                     nieuw += 1
                     eraf += 1
                 log(f"[surf]   ✓ pagina bewaard (score {res['score']:.0f}) + {eraf} video('s) eraf")

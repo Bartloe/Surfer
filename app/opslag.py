@@ -1,12 +1,12 @@
 """
 opslag — datalaag: profielen lezen + per-profiel resultaten/statussen/geheugen.
 
-Versie: 1.1
-Reden:  Vondsten beschermen tegen dataverlies: veilig wegschrijven (eerst naar een
-        tijdelijk bestand, dan omwisselen) + een .bak-reservekopie van de vorige
-        goede versie. Zo kan een onderbroken of foute schrijfactie de oogst niet
-        meer vernietigen.
-Datum:  2026-06-30 21:45 (NL)
+Versie: 1.2
+Reden:  Herkomst vastleggen — elk resultaat onthoudt nu via welke zoekterm het
+        binnenkwam ('bron_term'). Hierop draait de zoekterm-analyse (welke termen
+        leveren de meeste bewaarde vondsten). Oude vondsten zonder dit veld tellen
+        als 'onbekend'. Eerder (v1.1): veilig wegschrijven + .bak-reservekopie.
+Datum:  2026-06-30 23:25 (NL)
 
 - Profiel = los .txt-bestand in profielen/ met de kopjes 'Zoektermen:' en 'Context:'.
 - Per profiel één werkbestand resultaten/<profiel>.json met:
@@ -101,13 +101,13 @@ class ProfielOpslag:
     # -- toevoegen / wijzigen ------------------------------------------------
     def voeg_resultaat(self, url: str, titel: str, type: str, run: str,
                        samenvatting: str = "", oordeel: str = "", score: float = 0.0,
-                       parent_url: str | None = None):
+                       parent_url: str | None = None, bron_term: str | None = None):
         if url in self.resultaten:
             return
         self.resultaten[url] = {
             "url": url, "titel": titel, "type": type, "run": run,
             "samenvatting": samenvatting, "oordeel": oordeel, "score": score,
-            "parent_url": parent_url, "status": "nieuw",
+            "parent_url": parent_url, "bron_term": bron_term, "status": "nieuw",
         }
 
     def zet_status(self, url: str, status: str):

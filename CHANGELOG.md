@@ -2,6 +2,24 @@
 
 Alle noemenswaardige wijzigingen aan dit project staan hier (Nederlands).
 
+## 2026-06-30 (nacht) — zoekterm-analyse (welke termen leveren het meeste op)
+
+### Nieuw — analyse van de zoektermen
+- **Herkomst vastgelegd** (`opslag.py` v1.2, `kern.py` v1.2): elke vondst onthoudt nu
+  via welke zoekterm hij binnenkwam (`bron_term`); video's van een pagina erven de term
+  van die pagina. *Let op:* dit meet vanaf nu — vondsten van vóór deze wijziging hebben
+  geen herkomst en vallen onder "(onbekend)".
+- **Rekenlaag** (`analyse.py` v1.0): vat de vondsten samen per zoekterm — bewaard,
+  weggegooid, nog open, **trefkans** (bewaard ÷ beoordeeld → ontmaskert ruis-termen) en
+  het **gemiddelde AI-cijfer** over de écht beoordeelde vondsten. Gesorteerd op meeste
+  bewaard.
+- **Los rapport** (`rapport_zoektermen.py` v1.0): `python rapport_zoektermen.py <profiel>`
+  toont de tabel op het scherm en bewaart 'm als `resultaten/<profiel>_zoektermen.txt`.
+- **Knop in de app** (`gui.py` v1.7): *Analyse zoektermen* (rechts op de weergavebalk)
+  opent een venster met dezelfde tabel voor het gekozen profiel.
+- **Zelftest** (`zelftest.py` v1.2): test op telling per zoekterm, trefkans, gemiddeld
+  cijfer, sortering en de "(onbekend)"-groep.
+
 ## 2026-06-30 (nacht) — oordeel naast titel + meegroeiende breedte (`app/` gui.py v1.6)
 
 ### Gewijzigd — AI-oordeel begint nu echt op titelhoogte
