@@ -1,10 +1,12 @@
 """
 graafwerk — de web-laag van de stand-alone Surfer-app.
 
-Versie: 1.1
-Reden:  Betere video-titels van rijke pagina's — niet meer tig keer "video", maar
-        de echte omschrijving uit aria-label/title/alt; generieke labels vallen weg.
-Datum:  2026-06-30 19:59 (NL)
+Versie: 1.2
+Reden:  Titels uit de omgeving — op tabelpagina's (bv. Ziggo: wedstrijd | tijd |
+        'YouTube'-knop) staat de titel in een náástliggende cel, niet in de link.
+        Nu wordt die rij/omgeving gebruikt; "YouTube"/"Vimeo"-labels tellen niet
+        meer als titel.
+Datum:  2026-06-30 21:20 (NL)
 
 - Hergebruikt ONGEWIJZIGD het graafwerk van de bestaande Surfer (../poc):
   Scraper.haal_op (pagina ophalen) en extraheer (leesbare tekst).
@@ -48,10 +50,13 @@ _VIDEO_HINTS = (
 
 _scraper = Scraper()
 
-# Labels die geen echte titel zijn (een afspeel-knopje heet vaak gewoon "video").
+# Labels die geen echte titel zijn (een afspeel-knopje heet vaak gewoon "video",
+# en een verwijzing naar de bron heet vaak gewoon "YouTube"/"Vimeo").
 _GENERIEKE_LABELS = {
     "", "video", "video's", "videos", "bekijk video", "bekijk", "speel af",
     "afspelen", "play", "watch", "kijk", "kijken", "lees meer", "meer",
+    "youtube", "youtu.be", "vimeo", "dailymotion", "samenvatting",
+    "link", "hier", "klik hier", "open", "download", "bron",
 }
 
 
@@ -157,7 +162,44 @@ def _beste_link_titel(tag) -> str:
         schoon = " ".join((kandidaat or "").split())          # witruimte normaliseren
         if schoon and schoon.lower() not in _GENERIEKE_LABELS:
             return schoon
+    return _titel_uit_omgeving(tag)
+
+
+def _titel_uit_omgeving(tag) -> str:
+    """Geen bruikbare titel in de link zelf? Haal hem uit de directe omgeving.
+    Tabelpagina's (bv. Ziggo) zetten een 'YouTube'-knop náást de echte titel in
+    dezelfde rij; anders staat de titel in een kop/onderschrift van het blok."""
+    rij = _opwaarts(tag, "tr")
+    if rij is not None:
+        delen = []
+        for cel in rij.css("td, th"):
+            t = " ".join((cel.text() or "").split())
+            if t and t.lower() not in _GENERIEKE_LABELS and t not in delen:
+                delen.append(t)
+        if delen:
+            return " — ".join(delen)[:160]
+    blok = _opwaarts(tag, ("figure", "article", "li"))
+    if blok is not None:
+        kop = blok.css_first("figcaption, h1, h2, h3, h4, h5, h6")
+        if kop:
+            t = " ".join((kop.text() or "").split())
+            if t and t.lower() not in _GENERIEKE_LABELS:
+                return t[:160]
     return ""
+
+
+def _opwaarts(tag, namen):
+    """Dichtstbijzijnde ouder met (een van) deze tag-namen; None als die er niet is."""
+    if isinstance(namen, str):
+        namen = (namen,)
+    node = tag.parent
+    for _ in range(8):                          # nooit eindeloos omhoog klimmen
+        if node is None:
+            return None
+        if node.tag in namen:
+            return node
+        node = node.parent
+    return None
 
 
 def _normaliseer(url: str) -> str:

@@ -2,6 +2,25 @@
 
 Alle noemenswaardige wijzigingen aan dit project staan hier (Nederlands).
 
+## 2026-06-30 (avond) — indeling + titels uit tabellen
+
+### Gewijzigd — schermindeling op verzoek (`app/` gui.py v1.3)
+- **Sorteren + Per batch** staan nu **bovenaan** (eigen weergavebalk onder de zoekbalk).
+- **Bladeren** (*◀ Vorige* / *Volgende ▶*) en de teller staan nu **rechtsonder**.
+- **Per regel:** *wis* staat links (naast *bewaar*); *kopieer* staat direct rechts van
+  de titel. Het oordeel-cijfer staat uiterst rechts.
+- **Live verloop** verschijnt alleen tijdens een zoekronde en verdwijnt zodra de
+  resultaten klaarstaan. Bewust géén live bijwerken tijdens de run: dat zou met
+  sorteren-op-score onrustig heen-en-weer springen.
+
+### Opgelost — video-titels op tabelpagina's (`app/` graafwerk.py v1.2)
+- Pagina's als de Ziggo-samenvattingen zetten per wedstrijd een "YouTube"-knop in een
+  tabelrij; de échte titel (de wedstrijd) staat in een náástliggende cel. Voorheen
+  kreeg daardoor maar één van de ~76 video's een titel en toonde de rest "YouTube".
+  Nu wordt de titel uit de rij (of uit een kop/onderschrift) gehaald, en tellen
+  labels als "YouTube"/"Vimeo" niet meer als titel. Resultaat: alle 76 video's
+  krijgen hun wedstrijdnaam.
+
 ## 2026-06-30
 
 ### Toegevoegd — overzicht bij veel vondsten + dubbelklik-start (`app/` gui.py v1.2)

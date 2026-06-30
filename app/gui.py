@@ -1,19 +1,23 @@
 """
 gui — het scherm van de stand-alone Surfer-app (customtkinter).
 
-Versie: 1.2
-Reden:  Overzicht bij veel vondsten — sorteren (hoogste score / laatste run),
-        batch-weergave (N per keer) met 'wis getoonde → volgende', en bewaarde
-        vondsten apart bovenaan. (1.1 = live verloop, kopieer, klik-opent-alleen.)
-Datum:  2026-06-30 20:59 (NL)
+Versie: 1.3
+Reden:  Indeling opgeschoond op verzoek — sorteren/per-batch bovenaan; bladeren
+        (Vorige/Volgende) rechtsonder; per regel 'wis' links (naast bewaar) en
+        'kopieer' direct rechts van de titel; live verloop alleen tijdens een run
+        en daarna automatisch weg (zo komen de resultaten rustig in beeld).
+Datum:  2026-06-30 21:25 (NL)
 
-- Bovenin: profiel kiezen/bewerken/nieuw, drempel + aantal, en de zoekknop.
-- Live venster onder de knoppen: toont tijdens een run welke stap loopt.
+- Bovenin: profiel kiezen/bewerken/nieuw, drempel + aantal, de zoekknop, en een
+  weergavebalk met Sorteer + Per batch.
+- Live verloop verschijnt alleen tijdens een run en verdwijnt zodra de resultaten
+  klaarstaan (bewust niet live bijwerken: dat zou met sorteren-op-score onrustig
+  springen).
 - Resultaten per blok: een pagina met daaronder de video's die erop staan (suburls);
   losse video-treffers staan op zichzelf.
-- Per regel: aankruisvak (bewaren), klikbare url (opent ALLEEN de browser), een
-  kopieer-knop (url naar klembord), het DeepSeek-oordeel rechts, samenvatting links.
-- Bulk: 'wis hele pagina' (pagina + video's erop) en 'wis alles van laatste run'.
+- Per regel: aankruisvak (bewaren) + 'wis' links, dan de klikbare titel (opent
+  ALLEEN de browser), 'kopieer' direct daarachter, en het DeepSeek-oordeel rechts.
+- Onderin: bulk-wissen links, status in het midden, bladeren rechtsonder.
 - Draaien:  .venv/Scripts/python.exe gui.py
 """
 
@@ -49,9 +53,9 @@ class App(ctk.CTk):
         self._huidige_batch_units: list[dict] = []
 
         self._bouw_bovenbalk()
-        self._bouw_resultaten()
-        self._bouw_batchbalk()
+        self._bouw_weergavebalk()
         self._bouw_log()
+        self._bouw_resultaten()
         self._bouw_onderbalk()
         self._herlaad_profielen()
 
@@ -82,13 +86,10 @@ class App(ctk.CTk):
                                        command=self._vraag_stop)
         self.stop_knop.pack(side="left")
 
-    def _bouw_resultaten(self):
-        self.lijst = ctk.CTkScrollableFrame(self, label_text="Resultaten")
-        self.lijst.pack(fill="both", expand=True, padx=10, pady=4)
-
-    def _bouw_batchbalk(self):
+    def _bouw_weergavebalk(self):
         balk = ctk.CTkFrame(self)
         balk.pack(fill="x", padx=10, pady=(0, 4))
+        self.balk_weergave = balk
 
         ctk.CTkLabel(balk, text="Sorteer:").pack(side="left", padx=(8, 2))
         self.sorteer_menu = ctk.CTkOptionMenu(
@@ -101,25 +102,20 @@ class App(ctk.CTk):
         self.batch_var = ctk.StringVar(value="25")
         ctk.CTkEntry(balk, textvariable=self.batch_var, width=44).pack(side="left")
 
-        self.knop_vorige = ctk.CTkButton(balk, text="◀ Vorige", width=80,
-                                         command=self._vorige_batch)
-        self.knop_vorige.pack(side="left", padx=(16, 4))
-        self.knop_volgende = ctk.CTkButton(balk, text="Volgende ▶", width=90,
-                                           command=self._volgende_batch)
-        self.knop_volgende.pack(side="left", padx=4)
-        ctk.CTkButton(balk, text="Wis getoonde (niet-bewaard)", fg_color=KLEUR_WIS,
-                      command=self._wis_batch).pack(side="left", padx=8)
-        self.batch_info = ctk.CTkLabel(balk, text="", anchor="e")
-        self.batch_info.pack(side="right", padx=10)
-
     def _bouw_log(self):
-        kader = ctk.CTkFrame(self)
-        kader.pack(fill="x", padx=10, pady=(0, 4))
-        ctk.CTkLabel(kader, text="Live verloop", anchor="w").pack(fill="x", padx=8, pady=(4, 0))
-        self.log_box = ctk.CTkTextbox(kader, height=150, wrap="none",
+        # Niet meteen gepackt: verschijnt pas tijdens een run (zie _toon_log).
+        self.log_kader = ctk.CTkFrame(self)
+        ctk.CTkLabel(self.log_kader, text="Live verloop", anchor="w").pack(fill="x", padx=8, pady=(4, 0))
+        self.log_box = ctk.CTkTextbox(self.log_kader, height=120, wrap="none",
                                       font=ctk.CTkFont(size=11))
         self.log_box.pack(fill="x", padx=8, pady=(2, 8))
         self.log_box.configure(state="disabled")
+
+    def _toon_log(self, aan: bool):
+        if aan:
+            self.log_kader.pack(fill="x", padx=10, pady=(0, 4), after=self.balk_weergave)
+        else:
+            self.log_kader.pack_forget()
 
     def _log(self, tekst):
         self.log_box.configure(state="normal")
@@ -127,11 +123,28 @@ class App(ctk.CTk):
         self.log_box.see("end")
         self.log_box.configure(state="disabled")
 
+    def _bouw_resultaten(self):
+        self.lijst = ctk.CTkScrollableFrame(self, label_text="Resultaten")
+        self.lijst.pack(fill="both", expand=True, padx=10, pady=4)
+
     def _bouw_onderbalk(self):
         balk = ctk.CTkFrame(self)
         balk.pack(fill="x", padx=10, pady=(4, 10))
+        ctk.CTkButton(balk, text="Wis getoonde (niet-bewaard)", fg_color=KLEUR_WIS,
+                      command=self._wis_batch).pack(side="left", padx=6)
         ctk.CTkButton(balk, text="Wis alles van laatste run", fg_color=KLEUR_WIS,
                       command=self._wis_run).pack(side="left", padx=6)
+
+        # Rechtsonder: bladeren door de batches.
+        self.knop_volgende = ctk.CTkButton(balk, text="Volgende ▶", width=90,
+                                           command=self._volgende_batch)
+        self.knop_volgende.pack(side="right", padx=(4, 6))
+        self.knop_vorige = ctk.CTkButton(balk, text="◀ Vorige", width=80,
+                                         command=self._vorige_batch)
+        self.knop_vorige.pack(side="right", padx=4)
+        self.batch_info = ctk.CTkLabel(balk, text="", anchor="e")
+        self.batch_info.pack(side="right", padx=10)
+
         self.status_label = ctk.CTkLabel(balk, text="Klaar.", anchor="w")
         self.status_label.pack(side="left", fill="x", expand=True, padx=10)
 
@@ -195,6 +208,7 @@ class App(ctk.CTk):
         self._stop = False
         self.zoek_knop.configure(state="disabled")
         self.stop_knop.configure(state="normal")
+        self._toon_log(True)
         self.log_box.configure(state="normal")
         self.log_box.delete("1.0", "end")
         self.log_box.configure(state="disabled")
@@ -229,6 +243,7 @@ class App(ctk.CTk):
         self._bezig = False
         self.zoek_knop.configure(state="normal")
         self.stop_knop.configure(state="disabled")
+        self._toon_log(False)             # log weg, resultaten rustig in beeld
         self.winkel = opslag_mod.ProfielOpslag(profiel)
         self._teken()
 
@@ -367,7 +382,6 @@ class App(ctk.CTk):
             self._subrij(self._blok(), u["hoofd"])
 
     def _update_batchbalk(self, start: int, eind: int, totaal: int):
-        getoond = max(0, eind - start)
         self.batch_info.configure(
             text=f"Toont {start + 1}–{eind} van {totaal}" if totaal else "Niets te tonen")
         self.knop_volgende.configure(state="normal" if eind < totaal else "disabled")
@@ -417,21 +431,23 @@ class App(ctk.CTk):
         ctk.CTkCheckBox(kop, text="bewaar", width=70, variable=var,
                         command=lambda u=r["url"], v=var: self._bewaar_toggle(u, v)
                         ).pack(side="left")
-        merk = {"video": "🎬", "pagina": "📄", "suburl": "🎬"}.get(r["type"], "•")
-        ctk.CTkButton(kop, text=f"{merk}  {(r['titel'] or r['url'])[:95]}", anchor="w",
-                      fg_color="transparent", text_color=KLEUR_LINK, hover=False,
-                      command=lambda u=r["url"]: self._open(u)
-                      ).pack(side="left", fill="x", expand=True, padx=4)
-        if r.get("score"):
-            ctk.CTkLabel(kop, text=f"{r['score']:.0f}", width=26).pack(side="left")
-        ctk.CTkButton(kop, text="kopieer", width=64,
-                      command=lambda u=r["url"]: self._kopieer(u)).pack(side="left", padx=4)
+        # 'wis' staat links, direct naast 'bewaar'.
         if wis_blok:
             ctk.CTkButton(kop, text="wis hele pagina", width=110, fg_color=KLEUR_WIS,
                           command=lambda u=r["url"]: self._wis_blok(u)).pack(side="left", padx=4)
         else:
             ctk.CTkButton(kop, text="wis", width=48, fg_color=KLEUR_WIS,
                           command=lambda u=r["url"]: self._wis_een(u)).pack(side="left", padx=4)
+        merk = {"video": "🎬", "pagina": "📄", "suburl": "🎬"}.get(r["type"], "•")
+        ctk.CTkButton(kop, text=f"{merk}  {(r['titel'] or r['url'])[:95]}", anchor="w",
+                      fg_color="transparent", text_color=KLEUR_LINK, hover=False,
+                      command=lambda u=r["url"]: self._open(u)
+                      ).pack(side="left", fill="x", expand=True, padx=4)
+        # 'kopieer' direct rechts van de titel.
+        ctk.CTkButton(kop, text="kopieer", width=64,
+                      command=lambda u=r["url"]: self._kopieer(u)).pack(side="left", padx=4)
+        if r.get("score"):
+            ctk.CTkLabel(kop, text=f"{r['score']:.0f}", width=26).pack(side="left", padx=(4, 0))
 
         ctk.CTkLabel(parent, text=r["url"], text_color="gray", anchor="w",
                      font=ctk.CTkFont(size=10)).pack(fill="x", padx=14)
@@ -446,7 +462,8 @@ class App(ctk.CTk):
                      anchor="nw", text_color="#cfcfcf").grid(row=0, column=1, sticky="nwe")
 
     def _subrij(self, parent, s):
-        # Eén strakke regel per video: aanvinkvakje, klikbare titel, kopieer, wis.
+        # Eén strakke regel per video: aanvinkvakje + 'wis' links, dan de klikbare
+        # titel, daarachter 'kopieer'.
         klein = ctk.CTkFont(size=11)
         rij = ctk.CTkFrame(parent, fg_color="transparent", height=26)
         rij.pack(fill="x", padx=(28, 6), pady=0)
@@ -456,6 +473,8 @@ class App(ctk.CTk):
                         variable=var,
                         command=lambda u=s["url"], v=var: self._bewaar_toggle(u, v)
                         ).pack(side="left")
+        ctk.CTkButton(rij, text="wis", width=40, height=24, font=klein, fg_color=KLEUR_WIS,
+                      command=lambda u=s["url"]: self._wis_een(u)).pack(side="left", padx=2)
         ctk.CTkButton(rij, text=f"🎬  {(s['titel'] or s['url'])[:110]}", anchor="w",
                       height=24, font=klein, fg_color="transparent",
                       text_color=KLEUR_LINK, hover=False,
@@ -463,8 +482,6 @@ class App(ctk.CTk):
                       ).pack(side="left", fill="x", expand=True, padx=4)
         ctk.CTkButton(rij, text="kopieer", width=58, height=24, font=klein,
                       command=lambda u=s["url"]: self._kopieer(u)).pack(side="left", padx=2)
-        ctk.CTkButton(rij, text="wis", width=40, height=24, font=klein, fg_color=KLEUR_WIS,
-                      command=lambda u=s["url"]: self._wis_een(u)).pack(side="left", padx=2)
 
 
 if __name__ == "__main__":
